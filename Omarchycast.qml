@@ -225,11 +225,37 @@ Item {
     return matches
   }
 
+  // Consumer-side bounds, applied even though the daemon clamps on its side:
+  // this file is the display boundary, and it should hold on its own.
+  readonly property int maxRows: 64
+  readonly property int maxFieldChars: 400
+
+  function sanitiseItems(items) {
+    if (!items || !items.length) return []
+    var out = []
+    var count = Math.min(items.length, root.maxRows)
+    for (var i = 0; i < count; i++) {
+      var item = items[i]
+      if (!item || typeof item.id !== "string") continue
+      out.push({
+        id: item.id.slice(0, 1024),
+        provider: String(item.provider || "").slice(0, 32),
+        kind: String(item.kind || "").slice(0, 32),
+        title: String(item.title || "").slice(0, root.maxFieldChars),
+        subtitle: item.subtitle ? String(item.subtitle).slice(0, root.maxFieldChars) : null,
+        icon: item.icon ? String(item.icon).slice(0, 4096) : null,
+        glyph: item.glyph ? String(item.glyph).slice(0, 8) : null,
+        accessory: item.accessory ? String(item.accessory).slice(0, 64) : null
+      })
+    }
+    return out
+  }
+
   function applyResults(items) {
     // The empty-query request goes out before the config reply decides whether
     // to run the tour, so its response can land afterwards and overwrite it.
     if (root.tourActive) return
-    root.results = root.syntheticFor(root.queryText).concat(items || [])
+    root.results = root.syntheticFor(root.queryText).concat(root.sanitiseItems(items))
     root.selectedIndex = 0
     root.disarmPointer()
     resultList.positionViewAtBeginning()
@@ -391,7 +417,7 @@ Item {
         delete daemon.pending[reply.rid]
 
         if (!reply.ok) {
-          root.statusMessage = reply.error || "Something went wrong"
+          root.statusMessage = String(reply.error || "Something went wrong").slice(0, 300)
           return
         }
 
@@ -546,6 +572,9 @@ Item {
             font.pixelSize: Style.font.title
             selectByMouse: true
             clip: true
+            // Matches the daemon's MAX_QUERY_CHARS. Without this a very large
+            // paste would exceed the request-line cap and cost the connection.
+            maximumLength: 512
 
             onTextChanged: {
               root.queryText = text
@@ -672,6 +701,7 @@ Item {
                     anchors.centerIn: parent
                     visible: !modelData.icon
                     text: modelData.glyph || ""
+                    textFormat: Text.PlainText
                     color: row.isSelected ? root.selectedText : root.foreground
                     opacity: 0.6
                     font.family: root.fontFamily
@@ -687,6 +717,7 @@ Item {
                   Text {
                     width: parent.width
                     text: modelData.title || ""
+                    textFormat: Text.PlainText
                     color: row.isSelected ? root.selectedText : root.foreground
                     elide: Text.ElideRight
                     font.family: root.fontFamily
@@ -698,6 +729,7 @@ Item {
                     width: parent.width
                     visible: !!modelData.subtitle
                     text: modelData.subtitle || ""
+                    textFormat: Text.PlainText
                     color: row.isSelected ? root.selectedText : root.foreground
                     opacity: 0.6
                     elide: Text.ElideRight
@@ -710,6 +742,7 @@ Item {
                   id: meta
                   anchors.verticalCenter: parent.verticalCenter
                   text: modelData.accessory || modelData.kind || ""
+                  textFormat: Text.PlainText
                   color: row.isSelected ? root.selectedText : root.foreground
                   opacity: 0.55
                   font.family: root.fontFamily
@@ -723,6 +756,7 @@ Item {
             anchors.centerIn: parent
             visible: !root.settingsOpen && root.results.length === 0
             text: root.statusMessage.length > 0 ? root.statusMessage : "No results"
+            textFormat: Text.PlainText
             color: root.foreground
             opacity: 0.5
             font.family: root.fontFamily
@@ -769,6 +803,7 @@ Item {
             opacity: 0.55
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
+            textFormat: Text.PlainText
             text: {
               if (root.confirming) return root.statusMessage
               if (root.settingsOpen) return "esc  Back"

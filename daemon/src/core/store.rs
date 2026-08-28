@@ -34,7 +34,7 @@ pub struct Store {
 impl Store {
     pub fn open() -> Result<Self> {
         let dir = data_dir();
-        std::fs::create_dir_all(&dir)?;
+        crate::safeio::ensure_private_dir(&dir)?;
         let conn = Connection::open(dir.join("omarchycast.db"))?;
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;

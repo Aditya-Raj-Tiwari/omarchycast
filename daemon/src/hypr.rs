@@ -54,7 +54,7 @@ pub fn install_hotkey(hotkey: &str) -> Result<()> {
          -- binding below, because unbinds are applied after binds.\n\
          o.bind(\"{hotkey}\", \"Omarchycast\", \"omarchy-shell shell toggle {PLUGIN_ID}\")\n"
     );
-    std::fs::write(&path, contents)?;
+    crate::safeio::write_atomic(&path, &contents)?;
 
     ensure_sourced(&path)?;
     reload();
@@ -66,7 +66,10 @@ fn ensure_sourced(binding_path: &PathBuf) -> Result<()> {
     let config = hypr_dir()
         .map(|d| d.join("hyprland.lua"))
         .ok_or_else(|| anyhow!("~/.config/hypr does not exist"))?;
-    let existing = std::fs::read_to_string(&config).unwrap_or_default();
+    // hyprland.lua is the user's own file: read through the capped,
+    // owner-verified path and rewrite atomically, so a failure part-way can
+    // never leave a truncated compositor config behind.
+    let existing = crate::safeio::read_capped(&config, crate::limits::MAX_HYPR_CONFIG_BYTES)?;
     if existing.contains(MARKER) {
         return Ok(());
     }
@@ -76,7 +79,7 @@ fn ensure_sourced(binding_path: &PathBuf) -> Result<()> {
          dofile(os.getenv(\"HOME\") .. \"/.config/hypr/omarchycast.lua\")\n"
     );
     let updated = format!("{}{}", existing.trim_end_matches('\n'), line);
-    std::fs::write(&config, updated)?;
+    crate::safeio::write_atomic(&config, &updated)?;
     Ok(())
 }
 

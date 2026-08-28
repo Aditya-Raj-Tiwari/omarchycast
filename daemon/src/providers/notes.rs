@@ -14,7 +14,6 @@ const KEYWORD: &str = "note";
 const VIEWER: &str = "shadow-notes";
 /// Only the start of a note is searched; nobody looks for a note by its tail.
 const BODY_WINDOW: usize = 8192;
-const MAX_NOTES: usize = 2000;
 
 pub fn default_directory() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join("Notes")
@@ -75,7 +74,7 @@ fn preview_for(contents: &str) -> String {
 fn read_notes(directory: &Path) -> Vec<Note> {
     let mut paths: Vec<PathBuf> = Vec::new();
     if let Ok(entries) = std::fs::read_dir(directory) {
-        for entry in entries.flatten().take(MAX_NOTES) {
+        for entry in entries.flatten().take(crate::limits::MAX_NOTES) {
             let path = entry.path();
             let is_markdown = path
                 .extension()
@@ -95,7 +94,10 @@ fn read_notes(directory: &Path) -> Vec<Note> {
     paths
         .into_iter()
         .filter_map(|path| {
-            let contents = std::fs::read_to_string(&path).ok()?;
+            // Capped, owner-checked, symlink-refusing read: a notes directory
+            // is user data, and one 10 GB file must not become a 10 GB buffer.
+            let contents =
+                crate::safeio::read_capped_optional(&path, crate::limits::MAX_NOTE_BYTES)?;
             let window: String = contents.chars().take(BODY_WINDOW).collect();
             Some(Note {
                 title: title_for(&path, &contents),
@@ -166,7 +168,7 @@ impl NotesProvider {
             path = directory.join(format!("{}-{suffix}.md", slugify(title)));
             suffix += 1;
         }
-        std::fs::write(&path, format!("# {title}\n\n"))?;
+        crate::safeio::write_atomic(&path, &format!("# {title}\n\n"))?;
         self.reindex();
         Ok(path)
     }

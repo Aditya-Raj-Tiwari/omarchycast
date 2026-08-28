@@ -42,6 +42,39 @@ impl Item {
     }
 }
 
+impl Item {
+    /// Enforces the display-field limits in `limits`. Runs once per emitted
+    /// item, immediately before serialisation.
+    pub fn clamp(&mut self) {
+        use crate::limits::*;
+        self.title = clamp_text(&self.title, MAX_TITLE_CHARS);
+        self.subtitle = clamp_text_opt(self.subtitle.take(), MAX_SUBTITLE_CHARS);
+        self.glyph = clamp_text_opt(self.glyph.take(), MAX_GLYPH_CHARS);
+        self.accessory = clamp_text_opt(self.accessory.take(), MAX_ACCESSORY_CHARS);
+        if self.icon.as_ref().is_some_and(|i| i.len() > MAX_ICON_PATH_BYTES) {
+            self.icon = None;
+        }
+        self.id.truncate_to_char_boundary(MAX_ITEM_ID_BYTES);
+    }
+}
+
+trait TruncateToBoundary {
+    fn truncate_to_char_boundary(&mut self, max_bytes: usize);
+}
+
+impl TruncateToBoundary for String {
+    fn truncate_to_char_boundary(&mut self, max_bytes: usize) {
+        if self.len() <= max_bytes {
+            return;
+        }
+        let mut end = max_bytes;
+        while end > 0 && !self.is_char_boundary(end) {
+            end -= 1;
+        }
+        self.truncate(end);
+    }
+}
+
 pub struct Query {
     pub trimmed: String,
 }
@@ -110,6 +143,12 @@ impl Registry {
             let mut produced = provider.query(&q);
             produced.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.title.cmp(&b.title)));
             produced.truncate(config.provider_limit(provider.id()));
+            // Bound every field on the way out. Providers index files the user
+            // does not control line by line (.desktop entries, notes), so the
+            // boundary treats their output as data, not as trusted strings.
+            for item in &mut produced {
+                item.clamp();
+            }
             items.append(&mut produced);
         }
 
@@ -130,5 +169,33 @@ impl Registry {
             .find(|p| p.id() == provider_id)
             .ok_or_else(|| anyhow::anyhow!("no provider named {provider_id}"))?;
         provider.activate(rest, action)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clamp_bounds_every_display_field() {
+        let mut item = Item::new("apps", "Application", "x".repeat(5000), "T".repeat(5000));
+        item.subtitle = Some("s".repeat(5000));
+        item.accessory = Some("a".repeat(5000));
+        item.glyph = Some("g".repeat(50));
+        item.icon = Some("i".repeat(10_000));
+        item.clamp();
+        assert!(item.title.chars().count() <= crate::limits::MAX_TITLE_CHARS);
+        assert!(item.subtitle.unwrap().chars().count() <= crate::limits::MAX_SUBTITLE_CHARS);
+        assert!(item.accessory.unwrap().chars().count() <= crate::limits::MAX_ACCESSORY_CHARS);
+        assert!(item.glyph.unwrap().chars().count() <= crate::limits::MAX_GLYPH_CHARS);
+        assert!(item.icon.is_none(), "over-long icon path must be dropped");
+        assert!(item.id.len() <= crate::limits::MAX_ITEM_ID_BYTES);
+    }
+
+    #[test]
+    fn clamp_strips_control_sequences_from_titles() {
+        let mut item = Item::new("apps", "Application", "id".into(), "evil\u{1b}[2Jtitle".into());
+        item.clamp();
+        assert_eq!(item.title, "evil[2Jtitle");
     }
 }

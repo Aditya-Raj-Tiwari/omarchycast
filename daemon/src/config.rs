@@ -114,23 +114,34 @@ impl Config {
     }
 
     pub fn load() -> Config {
-        let mut config: Config = std::fs::read_to_string(config_path())
-            .ok()
-            .and_then(|raw| serde_json::from_str(&raw).ok())
-            .unwrap_or_default();
-        if config.hotkey.trim().is_empty() {
-            config.hotkey = DEFAULT_HOTKEY.to_string();
-        }
+        let mut config: Config =
+            crate::safeio::read_capped_optional(&config_path(), crate::limits::MAX_CONFIG_BYTES)
+                .and_then(|raw| serde_json::from_str(&raw).ok())
+                .unwrap_or_default();
+        config.sanitise();
         config
     }
 
     pub fn save(&self) -> Result<()> {
-        let path = config_path();
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+        crate::safeio::write_atomic(&config_path(), &serde_json::to_string_pretty(self)?)
+    }
+
+    /// Clamps every setting into its legal range. Runs on load and on every
+    /// config received over IPC, so no field is ever trusted merely because it
+    /// deserialised: a hand-edited file and a socket message get the same rules.
+    pub fn sanitise(&mut self) {
+        use crate::limits::*;
+        if self.hotkey.trim().is_empty() || self.hotkey.chars().count() > MAX_HOTKEY_CHARS {
+            self.hotkey = DEFAULT_HOTKEY.to_string();
         }
-        std::fs::write(path, serde_json::to_string_pretty(self)?)?;
-        Ok(())
+        self.providers.apps_limit = self.providers.apps_limit.clamp(1, MAX_PROVIDER_RESULTS);
+        self.providers.notes_limit = self.providers.notes_limit.clamp(1, MAX_PROVIDER_RESULTS);
+        if self.providers.notes_directory.chars().count() > MAX_PATH_SETTING_CHARS {
+            self.providers.notes_directory = String::new();
+        }
+        self.appearance.width = self.appearance.width.clamp(320, 1600);
+        self.appearance.rows_visible = self.appearance.rows_visible.clamp(3, 20);
+        self.appearance.corner_radius = self.appearance.corner_radius.min(48);
     }
 
     pub fn provider_enabled(&self, id: &str) -> bool {
@@ -160,5 +171,30 @@ fn shellexpand_home(path: &str) -> String {
             .map(|h| h.join(rest).to_string_lossy().into_owned())
             .unwrap_or_else(|| path.to_string()),
         None => path.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitise_clamps_every_field_into_range() {
+        let mut c = Config {
+            hotkey: "K".repeat(500),
+            ..Config::default()
+        };
+        c.providers.apps_limit = 9999;
+        c.providers.notes_limit = 0;
+        c.appearance.width = 1;
+        c.appearance.rows_visible = 999;
+        c.appearance.corner_radius = 10_000;
+        c.sanitise();
+        assert_eq!(c.hotkey, DEFAULT_HOTKEY);
+        assert_eq!(c.providers.apps_limit, crate::limits::MAX_PROVIDER_RESULTS);
+        assert_eq!(c.providers.notes_limit, 1);
+        assert_eq!(c.appearance.width, 320);
+        assert_eq!(c.appearance.rows_visible, 20);
+        assert_eq!(c.appearance.corner_radius, 48);
     }
 }

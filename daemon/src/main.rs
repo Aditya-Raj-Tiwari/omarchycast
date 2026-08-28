@@ -10,6 +10,8 @@ mod core;
 mod hypr;
 mod ipc;
 mod launch;
+mod limits;
+mod safeio;
 mod providers;
 
 use crate::config::Config;
@@ -25,7 +27,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 /// Enough rows to scroll through without ever shipping a list nobody reads.
-const RESULT_LIMIT: usize = 40;
+const RESULT_LIMIT: usize = limits::MAX_RESULTS;
 
 const USAGE: &str = "\
 omarchycastd — search daemon for the Omarchycast launcher overlay
@@ -110,10 +112,15 @@ fn run() {
     // Clean up the socket on Ctrl-C so a restart isn't blocked by a stale file.
     install_signal_handler();
 
+    let clients = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
+        // At capacity the connection is dropped immediately: the legitimate
+        // consumer is one overlay, so the cap only ever bites a flood.
+        let Some(slot) = ipc::ClientSlot::claim(&clients) else { continue };
         let state = state.clone();
         std::thread::spawn(move || {
+            let _slot = slot;
             ipc::serve_connection(stream, |request| dispatch(&state, request));
         });
     }
@@ -124,6 +131,9 @@ fn dispatch(state: &State, request: Request) -> Response {
         Request::Ping => Response::ok(),
 
         Request::Query { text } => {
+            // Bounded before any provider sees it: a pathological query must
+            // cost at most a bounded match, never an unbounded allocation.
+            let text = limits::clamp_text(&text, limits::MAX_QUERY_CHARS);
             let Ok(config) = state.config.read() else {
                 return Response::error("configuration is unavailable");
             };
@@ -132,6 +142,9 @@ fn dispatch(state: &State, request: Request) -> Response {
         }
 
         Request::Activate { id, action } => {
+            if id.len() > limits::MAX_ITEM_ID_BYTES || action.len() > limits::MAX_ACTION_BYTES {
+                return Response::error("activation request out of bounds");
+            }
             match state.registry.activate(&id, Action::parse(&action)) {
                 Ok(()) => Response::ok(),
                 Err(e) => Response::error(e),
@@ -143,7 +156,10 @@ fn dispatch(state: &State, request: Request) -> Response {
             Err(_) => Response::error("configuration is unavailable"),
         },
 
-        Request::SetConfig { config } => {
+        Request::SetConfig { mut config } => {
+            // Same rules as a config loaded from disk — the socket is not a
+            // path around validation.
+            config.sanitise();
             let previous_hotkey = state.config.read().map(|c| c.hotkey.clone()).unwrap_or_default();
 
             // Rebinding touches the user's Hyprland config, so it only happens when
