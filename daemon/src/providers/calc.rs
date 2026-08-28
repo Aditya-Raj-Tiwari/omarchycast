@@ -84,7 +84,7 @@ fn evaluate(input: &str) -> Option<String> {
     })
 }
 
-/// Exposed for the `omacast eval` debug subcommand.
+/// Exposed for the `omarchycast eval` debug subcommand.
 pub fn eval_once(input: &str) -> Option<String> {
     evaluate(input)
 }

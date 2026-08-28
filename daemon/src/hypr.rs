@@ -8,8 +8,8 @@
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 
-pub const PLUGIN_ID: &str = "adityarajtiwari.omacast";
-const MARKER: &str = "-- Added by omacast:";
+pub const PLUGIN_ID: &str = "io.github.aditya-raj-tiwari.omarchycast";
+const MARKER: &str = "-- Added by omarchycast:";
 
 fn hypr_dir() -> Option<PathBuf> {
     let dir = dirs::home_dir()?.join(".config/hypr");
@@ -17,7 +17,7 @@ fn hypr_dir() -> Option<PathBuf> {
 }
 
 fn binding_file() -> Option<PathBuf> {
-    Some(hypr_dir()?.join("omacast.lua"))
+    Some(hypr_dir()?.join("omarchycast.lua"))
 }
 
 /// Rejects anything that isn't a plain `MOD + KEY` combination, so a settings
@@ -40,10 +40,10 @@ pub fn install_hotkey(hotkey: &str) -> Result<()> {
     let path = binding_file().ok_or_else(|| anyhow!("~/.config/hypr does not exist"))?;
 
     let contents = format!(
-        "-- Managed by Omacast. This file is rewritten whenever the hotkey is\n\
+        "-- Managed by Omarchycast. This file is rewritten whenever the hotkey is\n\
          -- changed from the launcher's settings panel, so edit it there instead.\n\
          pcall(function() hl.unbind(\"{hotkey}\") end)\n\
-         o.bind(\"{hotkey}\", \"Omacast\", \"omarchy-shell shell toggle {PLUGIN_ID}\")\n"
+         o.bind(\"{hotkey}\", \"Omarchycast\", \"omarchy-shell shell toggle {PLUGIN_ID}\")\n"
     );
     std::fs::write(&path, contents)?;
 
@@ -64,7 +64,7 @@ fn ensure_sourced(binding_path: &PathBuf) -> Result<()> {
     let _ = binding_path;
     let line = format!(
         "\n{MARKER} loads the launcher hotkey. Remove these two lines to uninstall it.\n\
-         dofile(os.getenv(\"HOME\") .. \"/.config/hypr/omacast.lua\")\n"
+         dofile(os.getenv(\"HOME\") .. \"/.config/hypr/omarchycast.lua\")\n"
     );
     let updated = format!("{}{}", existing.trim_end_matches('\n'), line);
     std::fs::write(&config, updated)?;

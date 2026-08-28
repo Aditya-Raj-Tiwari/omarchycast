@@ -248,7 +248,7 @@ fn answer(raw: &str) -> Option<Answer> {
     None
 }
 
-/// Exposed for the `omacast eval` debug subcommand.
+/// Exposed for the `omarchycast eval` debug subcommand.
 pub fn eval_once(input: &str) -> Option<String> {
     answer(input).map(|a| format!("{} ({})", a.title, a.subtitle))
 }

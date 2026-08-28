@@ -11,7 +11,7 @@ pub const DEFAULT_HOTKEY: &str = "CTRL + SPACE";
 fn config_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("omacast/config.json")
+        .join("omarchycast/config.json")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

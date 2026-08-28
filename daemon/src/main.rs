@@ -1,4 +1,4 @@
-//! Omacast search daemon.
+//! Omarchycast search daemon.
 //!
 //! Headless by design: the UI is a Quickshell overlay that runs inside the shell
 //! process already on screen, so this process owns only the index, the matching
@@ -28,13 +28,13 @@ use std::time::Duration;
 const RESULT_LIMIT: usize = 40;
 
 const USAGE: &str = "\
-omacastd — search daemon for the Omacast launcher overlay
+omarchycastd — search daemon for the Omarchycast launcher overlay
 
 USAGE:
-    omacastd              run the daemon (the overlay connects over a unix socket)
-    omacastd eval EXPR    evaluate EXPR with the calculator and date engines
-    omacastd hotkey KEYS  install KEYS as the Hyprland binding, e.g. 'CTRL + SPACE'
-    omacastd --help       show this message
+    omarchycastd              run the daemon (the overlay connects over a unix socket)
+    omarchycastd eval EXPR    evaluate EXPR with the calculator and date engines
+    omarchycastd hotkey KEYS  install KEYS as the Hyprland binding, e.g. 'CTRL + SPACE'
+    omarchycastd --help       show this message
 ";
 
 struct State {
@@ -52,7 +52,7 @@ fn main() {
             match providers::calc::eval_once(&expr).or_else(|| providers::date::eval_once(&expr)) {
                 Some(result) => println!("{result}"),
                 None => {
-                    eprintln!("omacastd: no result for {expr:?}");
+                    eprintln!("omarchycastd: no result for {expr:?}");
                     std::process::exit(1);
                 }
             }
@@ -60,14 +60,14 @@ fn main() {
         Some("hotkey") => {
             let keys = std::env::args().skip(2).collect::<Vec<_>>().join(" ");
             if let Err(e) = hypr::install_hotkey(&keys) {
-                eprintln!("omacastd: {e}");
+                eprintln!("omarchycastd: {e}");
                 std::process::exit(1);
             }
             println!("bound {keys} to the launcher");
         }
         Some("--help") | Some("-h") => print!("{USAGE}"),
         Some(other) => {
-            eprintln!("omacastd: unknown command '{other}'\n\n{USAGE}");
+            eprintln!("omarchycastd: unknown command '{other}'\n\n{USAGE}");
             std::process::exit(2);
         }
     }
@@ -77,7 +77,7 @@ fn run() {
     let listener = match ipc::listen() {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("omacastd: {e}");
+            eprintln!("omarchycastd: {e}");
             std::process::exit(1);
         }
     };
@@ -85,7 +85,7 @@ fn run() {
     let store = match Store::open() {
         Ok(s) => Arc::new(s),
         Err(e) => {
-            eprintln!("omacastd: could not open the frecency store: {e}");
+            eprintln!("omarchycastd: could not open the frecency store: {e}");
             std::process::exit(1);
         }
     };
@@ -189,7 +189,7 @@ fn watch_desktop_files(apps: Arc<AppsProvider>) {
         let mut debouncer = match new_debouncer(Duration::from_millis(750), None, tx) {
             Ok(d) => d,
             Err(e) => {
-                eprintln!("omacastd: desktop-file watcher unavailable: {e}");
+                eprintln!("omarchycastd: desktop-file watcher unavailable: {e}");
                 return;
             }
         };
@@ -218,7 +218,7 @@ fn watch_notes(notes: Arc<NotesProvider>) {
         let mut debouncer = match new_debouncer(Duration::from_millis(750), None, tx) {
             Ok(d) => d,
             Err(e) => {
-                eprintln!("omacastd: notes watcher unavailable: {e}");
+                eprintln!("omarchycastd: notes watcher unavailable: {e}");
                 return;
             }
         };

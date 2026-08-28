@@ -1,11 +1,11 @@
 [package]
-name = "omacastd"
+name = "omarchycastd"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.82"
-description = "Search daemon for the Omacast launcher overlay"
+description = "Search daemon for the Omarchycast launcher overlay"
 license = "MIT"
-repository = "https://github.com/Aditya-Raj-Tiwari/omacast"
+repository = "https://github.com/Aditya-Raj-Tiwari/omarchycast"
 
 [dependencies]
 anyhow = "1.0.104"

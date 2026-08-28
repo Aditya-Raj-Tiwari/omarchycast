@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "adityarajtiwari.omacast",
-  "name": "Omacast",
+  "id": "io.github.aditya-raj-tiwari.omarchycast",
+  "name": "Omarchycast",
   "version": "0.1.0",
   "author": "Aditya Raj Tiwari",
   "license": "MIT",
@@ -11,6 +11,6 @@
   ],
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "Omacast.qml"
+    "overlay": "Omarchycast.qml"
   }
 }

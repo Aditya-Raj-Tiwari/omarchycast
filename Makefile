@@ -1,6 +1,6 @@
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
-PLUGIN_ID ?= adityarajtiwari.omacast
+PLUGIN_ID ?= io.github.aditya-raj-tiwari.omarchycast
 PLUGINDIR ?= $(HOME)/.config/omarchy/plugins/$(PLUGIN_ID)
 
 .PHONY: all build install uninstall test check clean dev
@@ -13,17 +13,23 @@ build:
 test:
 	cd daemon && cargo test
 
+QMLLINT ?= /usr/lib/qt6/bin/qmllint
+OMARCHY_PATH ?= /usr/share/omarchy
+
 check:
 	cd daemon && cargo clippy --all-targets -- -D warnings
 	omarchy plugin validate .
+	# Catches QML that fails to compile — which the shell reports only in the
+	# journal, while silently continuing to serve the previously compiled copy.
+	$(QMLLINT) -I $(OMARCHY_PATH)/shell Omarchycast.qml SettingsPane.qml
 
 # Installs the daemon and registers the overlay with the shell.
 install: build
-	install -Dm755 daemon/target/release/omacastd $(BINDIR)/omacastd
+	install -Dm755 daemon/target/release/omarchycastd $(BINDIR)/omarchycastd
 	mkdir -p $(PLUGINDIR)
-	cp -f manifest.json Omacast.qml SettingsPane.qml $(PLUGINDIR)/
+	cp -f manifest.json Omarchycast.qml SettingsPane.qml $(PLUGINDIR)/
 	omarchy-shell shell rescanPlugins || true
-	@echo "Installed. Bind a key with: omacastd hotkey 'CTRL + SPACE'"
+	@echo "Installed. Bind a key with: omarchycastd hotkey 'CTRL + SPACE'"
 
 # Sync the QML and reload it.
 #
@@ -35,17 +41,17 @@ install: build
 #
 # If a change still seems to have no effect, the QML failed to compile and the
 # old component is still live. That failure is silent in the UI:
-#     journalctl --user -e | grep omacast
+#     journalctl --user -e | grep omarchycast
 dev:
 	mkdir -p $(PLUGINDIR)
-	cp -f manifest.json Omacast.qml SettingsPane.qml $(PLUGINDIR)/
+	cp -f manifest.json Omarchycast.qml SettingsPane.qml $(PLUGINDIR)/
 	omarchy-restart-shell
 
 uninstall:
-	rm -f $(BINDIR)/omacastd
+	rm -f $(BINDIR)/omarchycastd
 	rm -rf $(PLUGINDIR)
-	rm -f $(HOME)/.config/hypr/omacast.lua
-	@echo "Remove the two 'Added by omacast' lines from ~/.config/hypr/hyprland.lua to finish."
+	rm -f $(HOME)/.config/hypr/omarchycast.lua
+	@echo "Remove the two 'Added by omarchycast' lines from ~/.config/hypr/hyprland.lua to finish."
 
 clean:
 	cd daemon && cargo clean

@@ -1,4 +1,4 @@
-# Omacast
+# Omarchycast
 
 A keyboard launcher for [Omarchy](https://omarchy.org). One hotkey, one field.
 
@@ -7,7 +7,7 @@ or `25 GB to MB` and the answer is the first result, no mode to switch into and 
 calculator to open. Alongside that: fuzzy app search that learns what you actually
 open, date arithmetic, and your markdown notes, all in the same list.
 
-![Omacast](screenshot.png)
+![Omarchycast](screenshot.png)
 
 Dates are answered in the same field, with no mode to switch into:
 
@@ -15,7 +15,7 @@ Dates are answered in the same field, with no mode to switch into:
 
 ## Why it is built this way
 
-Omacast is a Quickshell **overlay plugin**, so the interface runs inside the
+Omarchycast is a Quickshell **overlay plugin**, so the interface runs inside the
 Omarchy shell process that is already on screen rather than in a browser engine
 of its own. Search itself lives in a small Rust daemon that keeps the app index
 in memory and answers over a unix socket.
@@ -28,11 +28,11 @@ webview stack measured 356 MB across three processes on the same machine.
    CTRL + SPACE
         │
         ▼
-  Omacast.qml ── overlay, inside the running Quickshell process
+  Omarchycast.qml ── overlay, inside the running Quickshell process
         │         layer-shell, exclusive keyboard focus
-        │  newline-delimited JSON over $XDG_RUNTIME_DIR/omacast.sock
+        │  newline-delimited JSON over $XDG_RUNTIME_DIR/omarchycast.sock
         ▼
-  omacastd ───── app index · fuzzy + frecency · calculator · dates · notes
+  omarchycastd ───── app index · fuzzy + frecency · calculator · dates · notes
 ```
 
 ## What it does
@@ -73,13 +73,13 @@ Requires Omarchy (Quickshell 0.3+), Hyprland, and a Rust toolchain to build the
 daemon. `wl-clipboard` is needed for copying.
 
 ```bash
-omarchy plugin add https://github.com/Aditya-Raj-Tiwari/omacast.git --enable
-cd ~/.config/omarchy/plugins/adityarajtiwari.omacast
+omarchy plugin add https://github.com/Aditya-Raj-Tiwari/omarchycast.git --enable
+cd ~/.config/omarchy/plugins/io.github.aditya-raj-tiwari.omarchycast
 make install
-omacastd hotkey 'CTRL + SPACE'
+omarchycastd hotkey 'CTRL + SPACE'
 ```
 
-`omacastd hotkey` writes `~/.config/hypr/omacast.lua` and adds one `dofile` line
+`omarchycastd hotkey` writes `~/.config/hypr/omarchycast.lua` and adds one `dofile` line
 to `hyprland.lua`. Wayland has no client-side global hotkey, so the binding has
 to live in the compositor's config; keeping it in its own file makes it easy to
 see and to remove.
@@ -87,7 +87,7 @@ see and to remove.
 Start the daemon at login by adding it to `~/.config/hypr/autostart.lua`:
 
 ```lua
-hl.exec_once("omacastd")
+hl.exec_once("omarchycastd")
 ```
 
 The overlay also starts the daemon on demand if it isn't running.
@@ -95,7 +95,7 @@ The overlay also starts the daemon on demand if it isn't running.
 ## Settings
 
 `Ctrl+,` or type `settings`. Everything is stored in
-`~/.config/omacast/config.json` and applies immediately.
+`~/.config/omarchycast/config.json` and applies immediately.
 
 - **Hotkey** — click the field, press a combination; it rewrites the Hyprland binding and reloads.
 - **Sources** — enable apps, calculator, dates and notes individually, cap how many rows each contributes, and set the notes folder.
@@ -124,17 +124,17 @@ whole document scores almost anything and buries the note you meant.
 
 ## Clipboard
 
-Omarchy already ships a clipboard manager, so Omacast does not keep a second
+Omarchy already ships a clipboard manager, so Omarchycast does not keep a second
 history. Typing `clipboard` opens Omarchy's own overlay instead.
 
 ## Uninstall
 
 ```bash
 make uninstall
-omarchy plugin remove adityarajtiwari.omacast
+omarchy plugin remove io.github.aditya-raj-tiwari.omarchycast
 ```
 
-Then delete the two `Added by omacast` lines from `~/.config/hypr/hyprland.lua`.
+Then delete the two `Added by omarchycast` lines from `~/.config/hypr/hyprland.lua`.
 
 ## Development
 
@@ -142,7 +142,7 @@ Then delete the two `Added by omacast` lines from `~/.config/hypr/hyprland.lua`.
 make dev     # symlink the working tree into the plugin dir, then rescan
 make test    # daemon unit tests
 make check   # clippy + omarchy plugin validate
-omacastd eval '25 GB to MB'    # exercise the engines without the UI
+omarchycastd eval '25 GB to MB'    # exercise the engines without the UI
 ```
 
 Adding a search source means implementing one trait in `daemon/src/providers/`:

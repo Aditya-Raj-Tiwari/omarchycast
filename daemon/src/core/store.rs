@@ -15,7 +15,7 @@ pub fn now_unix() -> i64 {
 pub fn data_dir() -> PathBuf {
     dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("omacast")
+        .join("omarchycast")
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -35,7 +35,7 @@ impl Store {
     pub fn open() -> Result<Self> {
         let dir = data_dir();
         std::fs::create_dir_all(&dir)?;
-        let conn = Connection::open(dir.join("omacast.db"))?;
+        let conn = Connection::open(dir.join("omarchycast.db"))?;
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              CREATE TABLE IF NOT EXISTS usage (

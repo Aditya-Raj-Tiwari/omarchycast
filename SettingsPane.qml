@@ -2,7 +2,7 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
-// Settings for the launcher. `host` is the Omacast root, which owns the config
+// Settings for the launcher. `host` is the Omarchycast root, which owns the config
 // object and the socket; this pane only edits and saves it.
 Flickable {
   id: pane
@@ -359,7 +359,7 @@ Flickable {
     Text {
       width: parent.width
       wrapMode: Text.WordWrap
-      text: "Wayland has no client-side global hotkey, so this writes the binding into ~/.config/hypr/omacast.lua and reloads Hyprland."
+      text: "Wayland has no client-side global hotkey, so this writes the binding into ~/.config/hypr/omarchycast.lua and reloads Hyprland."
       color: pane.fg
       opacity: 0.45
       font.family: pane.fontFamily

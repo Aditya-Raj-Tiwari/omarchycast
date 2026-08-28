@@ -7,7 +7,7 @@ import qs.Commons
 import qs.Ui
 
 // Overlay entry point. Omarchy summons this with `omarchy-shell toggle
-// adityarajtiwari.omacast`; the contract is the open/close/toggle trio below.
+// io.github.aditya-raj-tiwari.omarchycast`; the contract is the open/close/toggle trio below.
 Item {
   id: root
 
@@ -193,10 +193,10 @@ Item {
 
   readonly property var commands: [
     {
-      id: "ui:settings", provider: "ui", kind: "Omacast",
-      title: "Omacast Settings", subtitle: "Hotkey, sources, appearance, behaviour",
+      id: "ui:settings", provider: "ui", kind: "Omarchycast",
+      title: "Omarchycast Settings", subtitle: "Hotkey, sources, appearance, behaviour",
       icon: null, glyph: "⚙", accessory: null,
-      keywords: ["settings", "preferences", "omacast", "config", "hotkey"]
+      keywords: ["settings", "preferences", "omarchycast", "config", "hotkey"]
     },
     {
       id: "ui:clipboard", provider: "ui", kind: "Omarchy",
@@ -205,8 +205,8 @@ Item {
       keywords: ["clipboard", "clip", "history", "paste"]
     },
     {
-      id: "ui:tour", provider: "ui", kind: "Omacast",
-      title: "What can Omacast do?", subtitle: "Replay the quick tour",
+      id: "ui:tour", provider: "ui", kind: "Omarchycast",
+      title: "What can Omarchycast do?", subtitle: "Replay the quick tour",
       icon: null, glyph: "?", accessory: null,
       keywords: ["tour", "help", "guide", "examples"]
     }
@@ -339,7 +339,7 @@ Item {
     property var pending: ({})
     property int latestQueryId: 0
 
-    path: Quickshell.env("XDG_RUNTIME_DIR") + "/omacast.sock"
+    path: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchycast.sock"
     connected: true
 
     function ensureConnected() {
@@ -352,7 +352,7 @@ Item {
     function send(request) {
       if (!connected) {
         // Say so rather than showing an empty list, which reads as "nothing matched".
-        root.statusMessage = "Starting the omacast daemon…"
+        root.statusMessage = "Starting the omarchycast daemon…"
         ensureConnected()
         return 0
       }
@@ -434,7 +434,7 @@ Item {
 
   Process {
     id: starter
-    command: ["omacastd"]
+    command: ["omarchycastd"]
     running: false
   }
 
@@ -458,7 +458,7 @@ Item {
       if (attempts > 12) {
         stop()
         attempts = 0
-        root.statusMessage = "Could not reach the omacast daemon"
+        root.statusMessage = "Could not reach the omarchycast daemon"
       }
     }
   }
@@ -471,7 +471,7 @@ Item {
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "omacast"
+    WlrLayershell.namespace: "omarchycast"
     WlrLayershell.layer: WlrLayer.Overlay
     // Exclusive keyboard focus is what makes this feel like a real launcher:
     // no focus race, and no need to fight the compositor to keep the window up.
@@ -584,7 +584,7 @@ Item {
             anchors.leftMargin: Style.space(12)
             anchors.verticalCenter: parent.verticalCenter
             visible: root.settingsOpen
-            text: "Omacast Settings"
+            text: "Omarchycast Settings"
             color: root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.title
@@ -753,7 +753,7 @@ Item {
             anchors.left: parent.left
             anchors.leftMargin: Style.space(16)
             anchors.verticalCenter: parent.verticalCenter
-            text: "OMACAST"
+            text: "OMARCHYCAST"
             color: root.foreground
             opacity: 0.45
             font.family: root.fontFamily

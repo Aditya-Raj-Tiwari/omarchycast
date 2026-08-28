@@ -14,7 +14,7 @@ pub fn socket_path() -> PathBuf {
     let dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    dir.join("omacast.sock")
+    dir.join("omarchycast.sock")
 }
 
 /// Carries a caller-chosen request id so the overlay can discard a stale response
@@ -69,7 +69,7 @@ pub fn listen() -> Result<UnixListener> {
     let path = socket_path();
     if path.exists() {
         if UnixStream::connect(&path).is_ok() {
-            return Err(anyhow!("another omacast daemon is already running"));
+            return Err(anyhow!("another omarchycast daemon is already running"));
         }
         // Left over from a daemon that didn't shut down cleanly.
         std::fs::remove_file(&path)?;
