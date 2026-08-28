@@ -399,6 +399,16 @@ Flickable {
       onUpdated: pane.commit("providers", "notesLimit", value)
     }
     Toggle {
+      label: "Omarchy"; hint: "Menu entries, omarchy commands, and themes"
+      checked: host.config.providers.omarchy
+      onToggled: pane.commit("providers", "omarchy", value)
+    }
+    Stepper {
+      label: "Omarchy results"; value: host.config.providers.omarchyLimit
+      minimum: 1; maximum: 40
+      onUpdated: pane.commit("providers", "omarchyLimit", value)
+    }
+    Toggle {
       label: "Plugins"; hint: "Commands from ~/.config/omarchycast/plugins"
       checked: host.config.providers.plugins
       onToggled: pane.commit("providers", "plugins", value)

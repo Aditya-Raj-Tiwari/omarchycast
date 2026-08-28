@@ -22,6 +22,7 @@ use crate::providers::apps::AppsProvider;
 use crate::providers::calc::CalcProvider;
 use crate::providers::date::DateProvider;
 use crate::providers::notes::NotesProvider;
+use crate::providers::omarchy::OmarchyProvider;
 use crate::providers::plugins::PluginsProvider;
 use notify_debouncer_full::new_debouncer;
 use std::sync::{Arc, RwLock};
@@ -104,6 +105,7 @@ fn run() {
             notes.clone(),
             apps.clone(),
             plugins.clone(),
+            OmarchyProvider::new(),
         ]),
         config: RwLock::new(config),
         notes: notes.clone(),

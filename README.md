@@ -47,6 +47,8 @@ webview stack measured 356 MB across three processes on the same machine.
 | `checklist` | Your markdown notes, matched on title and body |
 | `note Groceries` | Creates that note and opens it |
 | `clipboard` | Opens Omarchy's clipboard manager |
+| `nightlight`, `suspend`, `screenshot` | Omarchy itself: every menu entry, runnable `omarchy` command, and installed theme |
+| `theme catppuccin` | Switches the Omarchy theme |
 | `settings` | The settings pane |
 
 Ranking is fuzzy relevance first, with a frecency boost — usage damped
@@ -98,7 +100,7 @@ The overlay also starts the daemon on demand if it isn't running.
 `~/.config/omarchycast/config.json` and applies immediately.
 
 - **Hotkey** — click the field, press a combination; it rewrites the Hyprland binding and reloads.
-- **Sources** — enable apps, calculator, dates, notes and plugins individually, cap how many rows each contributes, and set the notes folder.
+- **Sources** — enable apps, calculator, dates, notes, plugins and Omarchy individually, cap how many rows each contributes, and set the notes folder.
 - **Appearance** — width, visible rows, corner radius, and whether to follow the Omarchy theme.
 - **Behaviour** — dismiss on click-away, what Escape does, and whether an empty query lists frequent apps.
 
@@ -121,6 +123,16 @@ window while re-opening the same note focuses the one already on screen.
 
 Titles are matched fuzzily and body text literally — a fuzzy match against a
 whole document scores almost anything and buries the note you meant.
+
+## Omarchy, searchable
+
+The launcher indexes Omarchy itself: every entry of the Omarchy menu (with its
+breadcrumb, e.g. *System › Suspend*), every documented `omarchy` command that
+can run without arguments (from `omarchy commands --json`), and one row per
+installed theme. Menu actions that are plain commands run directly; anything
+with shell syntax falls back to summoning the menu at that entry, which is the
+surface built to run it. Commands requiring sudo or mandatory arguments are
+not indexed.
 
 ## Plugins
 
