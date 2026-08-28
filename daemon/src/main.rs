@@ -22,6 +22,8 @@ use crate::providers::apps::AppsProvider;
 use crate::providers::calc::CalcProvider;
 use crate::providers::date::DateProvider;
 use crate::providers::notes::NotesProvider;
+use crate::providers::omarchy::OmarchyProvider;
+use crate::providers::plugins::PluginsProvider;
 use notify_debouncer_full::new_debouncer;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -95,12 +97,15 @@ fn run() {
     let config = Config::load();
     let apps = AppsProvider::new(store.clone());
     let notes = NotesProvider::new(config.notes_directory());
+    let plugins = PluginsProvider::new();
     let state = Arc::new(State {
         registry: Registry::new(vec![
             CalcProvider::new(),
             DateProvider::new(),
             notes.clone(),
             apps.clone(),
+            plugins.clone(),
+            OmarchyProvider::new(),
         ]),
         config: RwLock::new(config),
         notes: notes.clone(),
@@ -108,6 +113,7 @@ fn run() {
 
     watch_desktop_files(apps);
     watch_notes(notes);
+    watch_plugins(plugins);
 
     // Clean up the socket on Ctrl-C so a restart isn't blocked by a stale file.
     install_signal_handler();
@@ -247,6 +253,30 @@ fn watch_notes(notes: Arc<NotesProvider>) {
         for result in rx {
             if result.is_ok() {
                 notes.reindex();
+            }
+        }
+    });
+}
+
+/// Re-index when a plugin manifest is added, edited or removed.
+fn watch_plugins(plugins: Arc<PluginsProvider>) {
+    std::thread::spawn(move || {
+        let directory = crate::providers::plugins::plugins_dir();
+        let _ = std::fs::create_dir_all(&directory);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut debouncer = match new_debouncer(Duration::from_millis(750), None, tx) {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        if debouncer
+            .watch(&directory, notify_debouncer_full::notify::RecursiveMode::NonRecursive)
+            .is_err()
+        {
+            return;
+        }
+        for result in rx {
+            if result.is_ok() {
+                plugins.reindex();
             }
         }
     });

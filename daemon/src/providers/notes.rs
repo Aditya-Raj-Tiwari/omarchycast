@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock};
 
 const PROVIDER: &str = "note";
 const KEYWORD: &str = "note";
-const VIEWER: &str = "shadow-notes";
+const VIEWER: &str = "omacastnotes";
 /// Only the start of a note is searched; nobody looks for a note by its tail.
 const BODY_WINDOW: usize = 8192;
 
@@ -19,11 +19,18 @@ pub fn default_directory() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join("Notes")
 }
 
-/// The single scratchpad shadow-notes opens when given no argument. It is listed
-/// alongside real notes so the launcher can reach it too.
+/// The single scratchpad omacastnotes opens when given no argument. It is
+/// listed alongside real notes so the launcher can reach it too. The old
+/// shadow-notes location still counts, for installs from before the rename.
 fn scratchpad() -> Option<PathBuf> {
-    let path = dirs::home_dir()?.join(".local/share/shadow-notes/data/notes.md");
-    path.exists().then_some(path)
+    let home = dirs::home_dir()?;
+    for dir in ["omacastnotes", "shadow-notes"] {
+        let path = home.join(format!(".local/share/{dir}/data/notes.md"));
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    None
 }
 
 struct Note {
