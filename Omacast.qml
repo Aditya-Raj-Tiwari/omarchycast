@@ -23,6 +23,13 @@ Item {
   // Set while a "Copied" confirmation is on screen, so the launcher stays up
   // just long enough for the user to see that something happened.
   property bool confirming: false
+  /// Shown once, on the first open. Rows are real examples: pressing Enter puts
+  /// one in the search field so the feature demonstrates itself, which teaches
+  /// more than a page of text nobody reads.
+  property bool tourActive: false
+  // Guards against flashing the tour before the daemon's config has arrived —
+  // the local default deliberately says "seen".
+  property bool configLoaded: false
   // Resolved once per summon rather than bound live, so the launcher stays put
   // if focus moves while it is open.
   property var targetScreen: null
@@ -36,7 +43,7 @@ Item {
       appsLimit: 20, notesLimit: 8, notesDirectory: ""
     },
     appearance: { width: 720, rowsVisible: 8, cornerRadius: 16, followTheme: true },
-    behaviour: { hideOnBlur: true, escClearsFirst: true, showRecentWhenEmpty: true }
+    behaviour: { hideOnBlur: true, escClearsFirst: true, showRecentWhenEmpty: true, tourSeen: true }
   })
 
   // Shares the [menu] surface tokens, so any theme that styles the Omarchy menu
@@ -80,6 +87,7 @@ Item {
     input.text = ""
     root.selectedIndex = 0
     root.statusMessage = ""
+    root.tourActive = false
     root.disarmPointer()
     daemon.ensureConnected()
     daemon.requestConfig()
@@ -112,6 +120,13 @@ Item {
   // ------------------------------------------------------------------- search
 
   function runQuery(text) {
+    if (root.tourActive) {
+      if (text.length === 0) {
+        root.results = root.tourItems
+        return
+      }
+      root.endTour()
+    }
     if (text.length === 0 && !config.behaviour.showRecentWhenEmpty) {
       root.results = root.syntheticFor("")
       root.selectedIndex = 0
@@ -122,6 +137,58 @@ Item {
 
   // Built-in commands, matched in the overlay rather than the daemon because
   // they act on the shell rather than on anything the daemon indexes.
+  readonly property var tourItems: [
+    {
+      id: "tour:calc", provider: "tour", kind: "Try", glyph: "=", icon: null,
+      title: "1920 * 0.85", subtitle: "Maths, units, bases and percentages — ↵ copies the answer",
+      accessory: "↵ try"
+    },
+    {
+      id: "tour:units", provider: "tour", kind: "Try", glyph: "=", icon: null,
+      title: "25 GB to MB", subtitle: "Convert units: also 5 miles to km, 0xff to decimal",
+      accessory: "↵ try"
+    },
+    {
+      id: "tour:date", provider: "tour", kind: "Try", glyph: "\u{1f5d3}", icon: null,
+      title: "days until october 8", subtitle: "Ask about dates — also 30 days from now, 2 weeks ago",
+      accessory: "↵ try"
+    },
+    {
+      id: "tour:note", provider: "tour", kind: "Try", glyph: "\u{270e}", icon: null,
+      title: "note Reading list", subtitle: "Create a markdown note and open it straight away",
+      accessory: "↵ try"
+    },
+    {
+      id: "tour:clipboard", provider: "tour", kind: "Try", glyph: "\u{2398}", icon: null,
+      title: "clipboard", subtitle: "Open Omarchy's clipboard manager",
+      accessory: "↵ try"
+    },
+    {
+      id: "tour:settings", provider: "tour", kind: "Try", glyph: "\u{2699}", icon: null,
+      title: "settings", subtitle: "Change the hotkey, sources, appearance and behaviour",
+      accessory: "↵ try"
+    }
+  ]
+
+  function startTour() {
+    root.tourActive = true
+    root.results = root.tourItems
+    root.selectedIndex = 0
+    root.disarmPointer()
+  }
+
+  /// Ends the tour. It is marked seen on any exit, including a skip: showing it
+  /// again after someone dismissed it is worse than never showing it.
+  function endTour() {
+    if (!root.tourActive) return
+    root.tourActive = false
+    if (root.config.behaviour.tourSeen) return
+    var next = JSON.parse(JSON.stringify(root.config))
+    next.behaviour.tourSeen = true
+    root.config = next
+    daemon.send({ op: "setConfig", config: next })
+  }
+
   readonly property var commands: [
     {
       id: "ui:settings", provider: "ui", kind: "Omacast",
@@ -134,6 +201,12 @@ Item {
       title: "Clipboard History", subtitle: "Open Omarchy's clipboard manager",
       icon: null, glyph: "⎘", accessory: null,
       keywords: ["clipboard", "clip", "history", "paste"]
+    },
+    {
+      id: "ui:tour", provider: "ui", kind: "Omacast",
+      title: "What can Omacast do?", subtitle: "Replay the quick tour",
+      icon: null, glyph: "?", accessory: null,
+      keywords: ["tour", "help", "guide", "examples"]
     }
   ]
 
@@ -151,6 +224,9 @@ Item {
   }
 
   function applyResults(items) {
+    // The empty-query request goes out before the config reply decides whether
+    // to run the tour, so its response can land afterwards and overwrite it.
+    if (root.tourActive) return
     root.results = root.syntheticFor(root.queryText).concat(items || [])
     root.selectedIndex = 0
     root.disarmPointer()
@@ -159,7 +235,17 @@ Item {
 
   // One definition of "back", used by every Escape handler: leave settings,
   // then clear the query, then dismiss.
-  function escape() {
+  //
+  // Not named `escape`: that is a JavaScript built-in, and QML rejects it with
+  // "Illegal method name". The whole component then fails to compile while the
+  // shell quietly keeps serving the previously compiled copy, which makes it
+  // look like edits are being ignored rather than rejected.
+  function goBack() {
+    if (root.tourActive) {
+      root.endTour()
+      root.runQuery(input.text)
+      return
+    }
     if (root.settingsOpen) {
       root.settingsOpen = false
       return
@@ -192,6 +278,17 @@ Item {
   function activate(action) {
     var item = root.results[root.selectedIndex]
     if (!item) return
+    if (item.provider === "tour") {
+      // Put the example in the field so it runs for real.
+      root.endTour()
+      input.text = item.title
+      return
+    }
+    if (item.id === "ui:tour") {
+      input.text = ""
+      root.startTour()
+      return
+    }
     if (item.id === "ui:settings") {
       root.settingsOpen = true
       return
@@ -219,7 +316,12 @@ Item {
   // -------------------------------------------------------------------- daemon
 
   function applyConfig(next) {
-    if (next) root.config = next
+    if (!next) return
+    root.config = next
+    root.configLoaded = true
+    if (root.opened && !root.tourActive && !next.behaviour.tourSeen && root.queryText.length === 0) {
+      root.startTour()
+    }
   }
 
   function saveConfig() {
@@ -238,15 +340,16 @@ Item {
     connected: true
 
     function ensureConnected() {
-      if (!connected) {
-        // The daemon may not be up yet on a fresh login; start it and retry.
-        starter.running = true
-        reconnect.restart()
-      }
+      if (connected) return
+      // The daemon may not be up yet on a fresh login; start it and retry.
+      starter.running = true
+      reconnect.restart()
     }
 
     function send(request) {
       if (!connected) {
+        // Say so rather than showing an empty list, which reads as "nothing matched".
+        root.statusMessage = "Starting the omacast daemon…"
         ensureConnected()
         return 0
       }
@@ -339,10 +442,17 @@ Item {
     running: false
     property int attempts: 0
     onTriggered: {
-      if (daemon.connected) { stop(); attempts = 0; return }
+      if (daemon.connected) {
+        stop()
+        attempts = 0
+        return
+      }
+      // Toggle rather than assign: setting `connected` to the value it already
+      // holds is not a change, so it would never retry the connection.
+      daemon.connected = false
       daemon.connected = true
       attempts += 1
-      if (attempts > 10) {
+      if (attempts > 12) {
         stop()
         attempts = 0
         root.statusMessage = "Could not reach the omacast daemon"
@@ -395,7 +505,7 @@ Item {
       // Safety net: whatever has focus, Escape always steps back one level.
       Keys.onPressed: function (event) {
         if (event.key !== Qt.Key_Escape) return
-        root.escape()
+        root.goBack()
         event.accepted = true
       }
 
@@ -460,7 +570,7 @@ Item {
               } else if (event.key === Qt.Key_Comma && (event.modifiers & Qt.ControlModifier)) {
                 root.settingsOpen = true; event.accepted = true
               } else if (event.key === Qt.Key_Escape) {
-                root.escape()
+                root.goBack()
                 event.accepted = true
               }
             }
@@ -659,6 +769,7 @@ Item {
             text: {
               if (root.confirming) return root.statusMessage
               if (root.settingsOpen) return "esc  Back"
+              if (root.tourActive) return "↵  Try it      esc  Skip the tour"
               var item = root.results[root.selectedIndex]
               if (!item) return "ctrl+,  Settings      esc  Dismiss"
               var verb = root.copiesToClipboard(item) ? "Copy" : "Open"

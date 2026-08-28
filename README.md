@@ -1,8 +1,11 @@
 # Omacast
 
-A keyboard launcher for [Omarchy](https://omarchy.org). One hotkey, one field:
-fuzzy app search that learns what you actually open, a calculator with unit
-conversion, date arithmetic, and your markdown notes — all in the same list.
+A keyboard launcher for [Omarchy](https://omarchy.org). One hotkey, one field.
+
+**Raycast-style calculations work directly in the search bar** — type `1920 * 0.85`
+or `25 GB to MB` and the answer is the first result, no mode to switch into and no
+calculator to open. Alongside that: fuzzy app search that learns what you actually
+open, date arithmetic, and your markdown notes, all in the same list.
 
 ![Omacast](screenshot.png)
 
@@ -46,6 +49,9 @@ Ranking is fuzzy relevance first, with a frecency boost — usage damped
 logarithmically and decayed on a 14-day half-life — so familiar apps rise
 without ever outranking a clearly better textual match. An empty query lists
 what you open most.
+
+On first open you get a short tour: six example queries you can press `↵` on to
+run for real, rather than a page of instructions. Type `tour` to see it again.
 
 ### Keys
 

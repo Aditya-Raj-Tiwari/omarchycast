@@ -449,7 +449,7 @@ Flickable {
 
   Keys.onPressed: function (event) {
     if (event.key === Qt.Key_Escape && !pane.capturing) {
-      host.escape()
+      host.goBack()
       event.accepted = true
     }
   }

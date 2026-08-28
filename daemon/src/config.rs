@@ -66,11 +66,18 @@ pub struct Behaviour {
     /// Escape clears a non-empty query before it dismisses the launcher.
     pub esc_clears_first: bool,
     pub show_recent_when_empty: bool,
+    /// Cleared once the first-run tour has been shown, so it appears exactly once.
+    pub tour_seen: bool,
 }
 
 impl Default for Behaviour {
     fn default() -> Self {
-        Behaviour { hide_on_blur: true, esc_clears_first: true, show_recent_when_empty: true }
+        Behaviour {
+            hide_on_blur: true,
+            esc_clears_first: true,
+            show_recent_when_empty: true,
+            tour_seen: false,
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
-PLUGINDIR ?= $(HOME)/.config/omarchy/plugins/adityarajtiwari.omacast
+PLUGIN_ID ?= adityarajtiwari.omacast
+PLUGINDIR ?= $(HOME)/.config/omarchy/plugins/$(PLUGIN_ID)
 
 .PHONY: all build install uninstall test check clean dev
 
@@ -24,12 +25,21 @@ install: build
 	omarchy-shell shell rescanPlugins || true
 	@echo "Installed. Bind a key with: omacastd hotkey 'CTRL + SPACE'"
 
-# Fast UI iteration: sync the QML and reload the shell without rebuilding Rust.
-# The plugin loader does not follow symlinks, so the files are copied.
+# Sync the QML and reload it.
+#
+# Qt caches compiled QML by URL, so neither `rescanPlugins` nor toggling the
+# plugin's enabled bit picks up an edit — the shell keeps serving the previously
+# compiled component. Restarting the shell is the only reliable reload. Note
+# `omarchy-restart-shell`, NOT `omarchy-refresh-shell`: the latter resets
+# shell.json to Omarchy defaults and would discard the user's bar layout.
+#
+# If a change still seems to have no effect, the QML failed to compile and the
+# old component is still live. That failure is silent in the UI:
+#     journalctl --user -e | grep omacast
 dev:
 	mkdir -p $(PLUGINDIR)
 	cp -f manifest.json Omacast.qml SettingsPane.qml $(PLUGINDIR)/
-	omarchy-shell shell rescanPlugins || true
+	omarchy-restart-shell
 
 uninstall:
 	rm -f $(BINDIR)/omacastd
