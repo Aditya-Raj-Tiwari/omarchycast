@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.aditya-raj-tiwari.omarchycast",
   "name": "Omarchycast",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Aditya Raj Tiwari",
   "license": "MIT",
   "description": "Keyboard launcher for Omarchy with Raycast-style calculations built straight into the search bar: arithmetic, unit and base conversion, percentages and date maths, answered as you type. Plus fuzzy app search with frecency ranking and markdown notes \u2014 one hotkey, one field.",

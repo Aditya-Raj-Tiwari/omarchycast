@@ -13,6 +13,14 @@ Dates are answered in the same field, with no mode to switch into:
 
 ![Date arithmetic](screenshot-dates.png)
 
+| Omarchy, searchable | Theme switching |
+|---|---|
+| ![Omarchy search](screenshot-omarchy.png) | ![Theme switching](screenshot-theme.png) |
+
+| Plugins beside system entries | |
+|---|---|
+| ![Plugin commands](screenshot-plugins.png) | |
+
 ## Why it is built this way
 
 Omarchycast is a Quickshell **overlay plugin**, so the interface runs inside the
