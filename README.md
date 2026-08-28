@@ -9,6 +9,10 @@ open, date arithmetic, and your markdown notes, all in the same list.
 
 ![Omacast](screenshot.png)
 
+Dates are answered in the same field, with no mode to switch into:
+
+![Date arithmetic](screenshot-dates.png)
+
 ## Why it is built this way
 
 Omacast is a Quickshell **overlay plugin**, so the interface runs inside the

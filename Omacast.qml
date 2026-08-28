@@ -125,7 +125,7 @@ Item {
         root.results = root.tourItems
         return
       }
-      root.endTour()
+      root.endTour(false)
     }
     if (text.length === 0 && !config.behaviour.showRecentWhenEmpty) {
       root.results = root.syntheticFor("")
@@ -177,12 +177,14 @@ Item {
     root.disarmPointer()
   }
 
-  /// Ends the tour. It is marked seen on any exit, including a skip: showing it
-  /// again after someone dismissed it is worse than never showing it.
-  function endTour() {
+  /// Ends the tour. `dismissed` distinguishes deliberately finishing with it —
+  /// skipping with Escape, or trying one of the examples — from merely starting
+  /// to type, which hides the rows but must not count as having seen it. Marking
+  /// it seen on the first keystroke is how it manages to never actually be read.
+  function endTour(dismissed) {
     if (!root.tourActive) return
     root.tourActive = false
-    if (root.config.behaviour.tourSeen) return
+    if (!dismissed || root.config.behaviour.tourSeen) return
     var next = JSON.parse(JSON.stringify(root.config))
     next.behaviour.tourSeen = true
     root.config = next
@@ -242,7 +244,7 @@ Item {
   // look like edits are being ignored rather than rejected.
   function goBack() {
     if (root.tourActive) {
-      root.endTour()
+      root.endTour(true)
       root.runQuery(input.text)
       return
     }
@@ -280,7 +282,7 @@ Item {
     if (!item) return
     if (item.provider === "tour") {
       // Put the example in the field so it runs for real.
-      root.endTour()
+      root.endTour(true)
       input.text = item.title
       return
     }
@@ -319,7 +321,8 @@ Item {
     if (!next) return
     root.config = next
     root.configLoaded = true
-    if (root.opened && !root.tourActive && !next.behaviour.tourSeen && root.queryText.length === 0) {
+    if (root.opened && !root.tourActive && !next.behaviour.tourSeen
+        && root.queryText.length === 0) {
       root.startTour()
     }
   }
