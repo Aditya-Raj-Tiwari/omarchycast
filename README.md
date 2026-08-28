@@ -139,8 +139,8 @@ breadcrumb, e.g. *System › Suspend*), every documented `omarchy` command that
 can run without arguments (from `omarchy commands --json`), and one row per
 installed theme. Menu actions that are plain commands run directly; anything
 with shell syntax falls back to summoning the menu at that entry, which is the
-surface built to run it. Commands requiring sudo or mandatory arguments are
-not indexed.
+surface built to run it. Commands that need elevated privileges or mandatory
+arguments are not indexed — the launcher never invokes a privilege boundary.
 
 ## Plugins
 
