@@ -59,11 +59,22 @@ pub struct Appearance {
     pub corner_radius: u32,
     /// When false the overlay uses its own palette instead of the Omarchy theme.
     pub follow_theme: bool,
+    /// Tighter rows and paddings; the default is the comfortable layout.
+    pub compact: bool,
+    /// Percentage applied to every font size the theme provides.
+    pub font_scale: u32,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
-        Appearance { width: 720, rows_visible: 8, corner_radius: 16, follow_theme: true }
+        Appearance {
+            width: 720,
+            rows_visible: 8,
+            corner_radius: 16,
+            follow_theme: true,
+            compact: false,
+            font_scale: 100,
+        }
     }
 }
 
@@ -152,6 +163,7 @@ impl Config {
         self.appearance.width = self.appearance.width.clamp(320, 1600);
         self.appearance.rows_visible = self.appearance.rows_visible.clamp(3, 20);
         self.appearance.corner_radius = self.appearance.corner_radius.min(48);
+        self.appearance.font_scale = self.appearance.font_scale.clamp(70, 160);
     }
 
     pub fn provider_enabled(&self, id: &str) -> bool {

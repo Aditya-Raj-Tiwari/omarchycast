@@ -42,7 +42,10 @@ Item {
       apps: true, calculator: true, dates: true, notes: true, plugins: true, omarchy: true,
       appsLimit: 20, notesLimit: 8, pluginsLimit: 10, omarchyLimit: 8, notesDirectory: ""
     },
-    appearance: { width: 720, rowsVisible: 8, cornerRadius: 16, followTheme: true },
+    appearance: {
+      width: 720, rowsVisible: 8, cornerRadius: 16, followTheme: true,
+      compact: false, fontScale: 100
+    },
     behaviour: { hideOnBlur: true, escClearsFirst: true, showRecentWhenEmpty: true, tourSeen: true }
   })
 
@@ -57,10 +60,19 @@ Item {
   readonly property color selectedText: themed ? Color.menu.selectedText : "#ffffff"
   readonly property string fontFamily: Style.font.menuFamily
 
+  // Density and type scale. Every font size the theme provides passes through
+  // fs(), and the paddings that give rows their height come from dense().
+  readonly property bool compact: config.appearance.compact
+  readonly property real fontScale: Math.max(0.7, Math.min(1.6, (config.appearance.fontScale || 100) / 100))
+  function fs(px) { return Math.max(8, Math.round(px * root.fontScale)) }
+  function dense(comfortable, tight) { return root.compact ? tight : comfortable }
+
   readonly property int cardWidth: Math.max(Style.space(420), Math.min(config.appearance.width, panel.width - Style.gapsOut * 2))
-  readonly property int rowHeight: Math.max(Style.space(46), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
-  readonly property int headerHeight: Math.max(Style.space(56), Style.font.title + Style.spacing.controlPaddingY * 2)
-  readonly property int footerHeight: Style.space(38)
+  readonly property int rowHeight: root.fs(Style.font.body) + root.fs(Style.font.caption)
+    + root.dense(Style.space(22), Style.space(10))
+  readonly property int headerHeight: Math.max(root.dense(Style.space(56), Style.space(44)),
+    root.fs(Style.font.title) + root.dense(Style.spacing.controlPaddingY * 2, Style.space(10)))
+  readonly property int footerHeight: root.dense(Style.space(38), Style.space(30))
 
   // ---------------------------------------------------------------- lifecycle
 
@@ -555,7 +567,7 @@ Item {
             color: root.foreground
             opacity: 0.55
             font.family: root.fontFamily
-            font.pixelSize: Style.font.title
+            font.pixelSize: root.fs(Style.font.title)
           }
 
           TextInput {
@@ -569,7 +581,7 @@ Item {
             focus: root.opened && !root.settingsOpen
             color: root.foreground
             font.family: root.fontFamily
-            font.pixelSize: Style.font.title
+            font.pixelSize: root.fs(Style.font.title)
             selectByMouse: true
             clip: true
             // Matches the daemon's MAX_QUERY_CHARS. Without this a very large
@@ -616,7 +628,7 @@ Item {
             text: "Omarchycast Settings"
             color: root.foreground
             font.family: root.fontFamily
-            font.pixelSize: Style.font.title
+            font.pixelSize: root.fs(Style.font.title)
           }
         }
 
@@ -635,8 +647,8 @@ Item {
           ListView {
             id: resultList
             anchors.fill: parent
-            anchors.topMargin: Style.space(6)
-            anchors.bottomMargin: Style.space(6)
+            anchors.topMargin: root.dense(Style.space(6), Style.space(3))
+            anchors.bottomMargin: root.dense(Style.space(6), Style.space(3))
             visible: !root.settingsOpen
             model: root.results
             clip: true
@@ -705,7 +717,7 @@ Item {
                     color: row.isSelected ? root.selectedText : root.foreground
                     opacity: 0.6
                     font.family: root.fontFamily
-                    font.pixelSize: Style.font.body
+                    font.pixelSize: root.fs(Style.font.body)
                   }
                 }
 
@@ -722,7 +734,7 @@ Item {
                     elide: Text.ElideRight
                     font.family: root.fontFamily
                     // The answer is the point of a calculator row, so it gets weight.
-                    font.pixelSize: row.isCalc ? Style.font.title : Style.font.body
+                    font.pixelSize: root.fs(row.isCalc ? Style.font.title : Style.font.body)
                   }
 
                   Text {
@@ -734,7 +746,7 @@ Item {
                     opacity: 0.6
                     elide: Text.ElideRight
                     font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
+                    font.pixelSize: root.fs(Style.font.caption)
                   }
                 }
 
@@ -746,7 +758,7 @@ Item {
                   color: row.isSelected ? root.selectedText : root.foreground
                   opacity: 0.55
                   font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
+                  font.pixelSize: root.fs(Style.font.caption)
                 }
               }
             }
@@ -760,7 +772,7 @@ Item {
             color: root.foreground
             opacity: 0.5
             font.family: root.fontFamily
-            font.pixelSize: Style.font.body
+            font.pixelSize: root.fs(Style.font.body)
           }
 
           SettingsPane {
@@ -791,7 +803,7 @@ Item {
             color: root.foreground
             opacity: 0.45
             font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
+            font.pixelSize: root.fs(Style.font.caption)
             font.letterSpacing: 1
           }
 
@@ -802,7 +814,7 @@ Item {
             color: root.foreground
             opacity: 0.55
             font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
+            font.pixelSize: root.fs(Style.font.caption)
             textFormat: Text.PlainText
             text: {
               if (root.confirming) return root.statusMessage

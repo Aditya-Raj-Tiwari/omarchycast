@@ -52,3 +52,36 @@ pub fn frecency_boost(launches: u32, last_used_unix: i64, now_unix: i64) -> i64 
 pub fn combine(fuzzy: u32, boost: i64) -> i64 {
     fuzzy as i64 * 100 + boost
 }
+
+/// Bonus for how the query sits in the title, applied uniformly by the
+/// registry. Fuzzy scores land around 10k-20k after `combine`, so these move
+/// near-ties without letting a prefix beat a clearly better textual match.
+pub fn query_bonus(query_lower: &str, title: &str) -> i64 {
+    if query_lower.is_empty() {
+        return 0;
+    }
+    let title_lower = title.to_lowercase();
+    if title_lower == query_lower {
+        12_000
+    } else if title_lower.starts_with(query_lower) {
+        8_000
+    } else if title_lower.split_whitespace().any(|w| w.starts_with(query_lower)) {
+        3_000
+    } else {
+        0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::query_bonus;
+
+    #[test]
+    fn prefix_of_the_whole_title_beats_a_word_prefix() {
+        let q = "fire";
+        assert!(query_bonus(q, "Firefox") > query_bonus(q, "Mozilla Firefox"));
+        assert!(query_bonus(q, "Mozilla Firefox") > query_bonus(q, "Misfire"));
+        assert_eq!(query_bonus("firefox", "Firefox"), 12_000);
+        assert_eq!(query_bonus("", "Firefox"), 0);
+    }
+}

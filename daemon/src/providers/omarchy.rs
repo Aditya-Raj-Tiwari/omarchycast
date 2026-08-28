@@ -111,9 +111,19 @@ struct CommandRow {
 }
 
 /// Only commands whose whole signature is optional can be run from a launcher
-/// row — `[--status]` yes, `<pid>` no.
+/// row — `[--status]` yes, `<pid>` no. Placeholders inside an optional
+/// bracket, like `[--editor=<name>]`, do not disqualify a command.
 fn runnable_bare(args: &str) -> bool {
-    !args.contains('<')
+    let mut depth = 0u32;
+    for c in args.chars() {
+        match c {
+            '[' => depth += 1,
+            ']' => depth = depth.saturating_sub(1),
+            '<' if depth == 0 => return false,
+            _ => {}
+        }
+    }
+    true
 }
 
 fn command_entries() -> Vec<Entry> {
@@ -467,6 +477,7 @@ mod tests {
     fn only_all_optional_signatures_run_bare() {
         assert!(runnable_bare(""));
         assert!(runnable_bare("[--status]"));
+        assert!(runnable_bare("[smart|region] [--editor=<name>]"));
         assert!(!runnable_bare("<pid> [comm]"));
     }
 }

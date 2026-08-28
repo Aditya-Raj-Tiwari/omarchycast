@@ -12,6 +12,7 @@ Flickable {
   readonly property color fg: host.foreground
   readonly property color accentColor: host.selectedBackground
   readonly property string fontFamily: host.fontFamily
+  function fs(px) { return host.fs(px) }
   property bool capturing: false
 
   focus: true
@@ -73,7 +74,7 @@ Flickable {
     color: pane.fg
     opacity: 0.5
     font.family: pane.fontFamily
-    font.pixelSize: Style.font.caption
+    font.pixelSize: pane.fs(Style.font.caption)
     font.letterSpacing: 1
     topPadding: Style.space(10)
   }
@@ -107,7 +108,7 @@ Flickable {
         color: pane.fg
         elide: Text.ElideRight
         font.family: pane.fontFamily
-        font.pixelSize: Style.font.body
+        font.pixelSize: pane.fs(Style.font.body)
       }
       Text {
         width: parent.width
@@ -117,7 +118,7 @@ Flickable {
         opacity: 0.5
         elide: Text.ElideRight
         font.family: pane.fontFamily
-        font.pixelSize: Style.font.caption
+        font.pixelSize: pane.fs(Style.font.caption)
       }
     }
 
@@ -162,7 +163,7 @@ Flickable {
       text: stepButton.glyph
       color: pane.fg
       font.family: pane.fontFamily
-      font.pixelSize: Style.font.caption
+      font.pixelSize: pane.fs(Style.font.caption)
     }
     MouseArea { anchors.fill: parent; onClicked: stepButton.activated() }
   }
@@ -183,7 +184,7 @@ Flickable {
       text: field.label
       color: pane.fg
       font.family: pane.fontFamily
-      font.pixelSize: Style.font.body
+      font.pixelSize: pane.fs(Style.font.body)
     }
 
     Rectangle {
@@ -207,7 +208,7 @@ Flickable {
         text: field.value
         color: pane.fg
         font.family: pane.fontFamily
-        font.pixelSize: Style.font.caption
+        font.pixelSize: pane.fs(Style.font.caption)
         selectByMouse: true
         clip: true
 
@@ -257,7 +258,7 @@ Flickable {
       text: stepper.label
       color: pane.fg
       font.family: pane.fontFamily
-      font.pixelSize: Style.font.body
+      font.pixelSize: pane.fs(Style.font.body)
     }
 
     Row {
@@ -276,7 +277,7 @@ Flickable {
         text: stepper.value
         color: pane.fg
         font.family: pane.fontFamily
-        font.pixelSize: Style.font.body
+        font.pixelSize: pane.fs(Style.font.body)
       }
       StepButton {
         glyph: "+"
@@ -306,7 +307,7 @@ Flickable {
         color: pane.fg
         opacity: pane.capturing ? 1.0 : 0.5
         font.family: pane.fontFamily
-        font.pixelSize: Style.font.body
+        font.pixelSize: pane.fs(Style.font.body)
       }
 
       Rectangle {
@@ -327,7 +328,7 @@ Flickable {
           text: host.config.hotkey
           color: pane.fg
           font.family: pane.fontFamily
-          font.pixelSize: Style.font.caption
+          font.pixelSize: pane.fs(Style.font.caption)
         }
 
         MouseArea {
@@ -363,7 +364,7 @@ Flickable {
       color: pane.fg
       opacity: 0.45
       font.family: pane.fontFamily
-      font.pixelSize: Style.font.caption
+      font.pixelSize: pane.fs(Style.font.caption)
     }
 
     SectionTitle { text: "SOURCES" }
@@ -441,6 +442,16 @@ Flickable {
       label: "Corner radius"; value: host.config.appearance.cornerRadius
       minimum: 0; maximum: 32; step: 2
       onUpdated: pane.commit("appearance", "cornerRadius", value)
+    }
+    Toggle {
+      label: "Compact density"; hint: "Tighter rows and paddings"
+      checked: host.config.appearance.compact
+      onToggled: pane.commit("appearance", "compact", value)
+    }
+    Stepper {
+      label: "Font size %"; value: host.config.appearance.fontScale
+      minimum: 70; maximum: 160; step: 10
+      onUpdated: pane.commit("appearance", "fontScale", value)
     }
     Toggle {
       label: "Follow the Omarchy theme"; hint: "Off uses a fixed dark palette"

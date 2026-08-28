@@ -132,6 +132,7 @@ impl Registry {
 
     pub fn query(&self, raw: &str, config: &Config, total: usize) -> Vec<Item> {
         let q = Query::new(raw);
+        let query_lower = q.trimmed.to_lowercase();
         let mut items: Vec<Item> = Vec::new();
 
         for provider in &self.providers {
@@ -143,10 +144,24 @@ impl Registry {
             let mut produced = provider.query(&q);
             produced.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.title.cmp(&b.title)));
             produced.truncate(config.provider_limit(provider.id()));
-            // Bound every field on the way out. Providers index files the user
-            // does not control line by line (.desktop entries, notes), so the
-            // boundary treats their output as data, not as trusted strings.
+            // Two ordering corrections the raw fuzzy score cannot see. A title
+            // the query is a prefix of should edge out a scattered match, and at
+            // equal relevance a launchable application should sit above the rows
+            // that merely mention the same name (install/remove menu entries).
+            // Pinned rows (calculator, dates) stay above all of this.
+            let priority: i64 = match provider.id() {
+                "apps" => 400,
+                "note" => 200,
+                "plug" => 100,
+                _ => 0,
+            };
             for item in &mut produced {
+                if item.score < 500_000 {
+                    item.score += score::query_bonus(&query_lower, &item.title) + priority;
+                }
+                // Bound every field on the way out. Providers index files the
+                // user does not control line by line, so the boundary treats
+                // their output as data, not as trusted strings.
                 item.clamp();
             }
             items.append(&mut produced);

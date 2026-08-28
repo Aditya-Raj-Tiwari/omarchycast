@@ -109,7 +109,7 @@ The overlay also starts the daemon on demand if it isn't running.
 
 - **Hotkey** — click the field, press a combination; it rewrites the Hyprland binding and reloads.
 - **Sources** — enable apps, calculator, dates, notes, plugins and Omarchy individually, cap how many rows each contributes, and set the notes folder.
-- **Appearance** — width, visible rows, corner radius, and whether to follow the Omarchy theme.
+- **Appearance** — width, visible rows, corner radius, whether to follow the Omarchy theme, **compact or comfortable density**, and a **font size** control (70–160 %).
 - **Behaviour** — dismiss on click-away, what Escape does, and whether an empty query lists frequent apps.
 
 ## Notes
