@@ -39,10 +39,19 @@ pub fn install_hotkey(hotkey: &str) -> Result<()> {
     let hotkey = validate_hotkey(hotkey)?;
     let path = binding_file().ok_or_else(|| anyhow!("~/.config/hypr does not exist"))?;
 
+    // Deliberately no `hl.unbind` here. Omarchy's DSL applies unbinds after
+    // binds, so unbinding the same key we are about to bind silently removes
+    // our own binding — the launcher then simply never opens. If the chosen key
+    // already belongs to an Omarchy default, the user unbinds it themselves in
+    // ~/.config/hypr/bindings.lua.
     let contents = format!(
         "-- Managed by Omarchycast. This file is rewritten whenever the hotkey is\n\
          -- changed from the launcher's settings panel, so edit it there instead.\n\
-         pcall(function() hl.unbind(\"{hotkey}\") end)\n\
+         --\n\
+         -- If this key is already bound by an Omarchy default, add\n\
+         --     hl.unbind(\"{hotkey}\")\n\
+         -- to ~/.config/hypr/bindings.lua; unbinding it here would cancel the\n\
+         -- binding below, because unbinds are applied after binds.\n\
          o.bind(\"{hotkey}\", \"Omarchycast\", \"omarchy-shell shell toggle {PLUGIN_ID}\")\n"
     );
     std::fs::write(&path, contents)?;
