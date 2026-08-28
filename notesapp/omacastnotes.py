@@ -503,8 +503,9 @@ class NotesApp(Gtk.Application):
             GLib.timeout_add(80, self._apply_saved_size)
             return
         if self.window.get_visible() and self.window.is_active():
-            self._capture_size()
-            self.window.hide()
+            # Toggling away ends the process; relaunch is well under a second
+            # and cheaper than half a gigabyte kept warm.
+            self._shutdown()
             return
         self.window.show()
         self.window.present()
@@ -582,10 +583,26 @@ class NotesApp(Gtk.Application):
         rgba.alpha = 1.0
         return rgba
 
-    def _on_delete(self, *_args):
+    def _shutdown(self) -> None:
+        """Hide at once, exit shortly after.
+
+        The app used to hide on close and keep running, which is right for a
+        toggled scratchpad but wrong once every note runs its own instance:
+        each closed note left a headless WebKit stack (~500 MB) behind. The
+        editor autosaves on a 280 ms debounce, so exit waits just long enough
+        for a pending save to arrive rather than racing it.
+        """
         self._capture_size()
         if self.window:
             self.window.hide()
+        GLib.timeout_add(450, self._final_quit)
+
+    def _final_quit(self) -> bool:
+        self.quit()
+        return False
+
+    def _on_delete(self, *_args):
+        self._shutdown()
         return True
 
     def _on_realize(self, widget) -> None:
@@ -652,8 +669,7 @@ class NotesApp(Gtk.Application):
         if kind == "save":
             save_notes(msg.get("markdown") or "")
         elif kind == "hide":
-            if self.window:
-                self.window.hide()
+            self._shutdown()
         elif kind == "copy":
             copy_markdown(msg.get("markdown") or "")
             if self.web:
