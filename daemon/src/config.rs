@@ -21,10 +21,12 @@ pub struct Providers {
     pub calculator: bool,
     pub dates: bool,
     pub notes: bool,
+    pub plugins: bool,
     /// Cap per provider, applied before results are merged, so one chatty
     /// provider can't crowd out the others.
     pub apps_limit: usize,
     pub notes_limit: usize,
+    pub plugins_limit: usize,
     /// Where markdown notes live. Empty means the default, `~/Notes`.
     pub notes_directory: String,
 }
@@ -36,8 +38,10 @@ impl Default for Providers {
             calculator: true,
             dates: true,
             notes: true,
+            plugins: true,
             apps_limit: 20,
             notes_limit: 8,
+            plugins_limit: 10,
             notes_directory: String::new(),
         }
     }
@@ -136,6 +140,7 @@ impl Config {
         }
         self.providers.apps_limit = self.providers.apps_limit.clamp(1, MAX_PROVIDER_RESULTS);
         self.providers.notes_limit = self.providers.notes_limit.clamp(1, MAX_PROVIDER_RESULTS);
+        self.providers.plugins_limit = self.providers.plugins_limit.clamp(1, MAX_PROVIDER_RESULTS);
         if self.providers.notes_directory.chars().count() > MAX_PATH_SETTING_CHARS {
             self.providers.notes_directory = String::new();
         }
@@ -150,6 +155,7 @@ impl Config {
             "calc" => self.providers.calculator,
             "date" => self.providers.dates,
             "note" => self.providers.notes,
+            "plug" => self.providers.plugins,
             _ => true,
         }
     }
@@ -158,6 +164,7 @@ impl Config {
         match id {
             "apps" => self.providers.apps_limit.max(1),
             "note" => self.providers.notes_limit.max(1),
+            "plug" => self.providers.plugins_limit.max(1),
             // Calculator and dates emit a single pinned row.
             _ => 4,
         }

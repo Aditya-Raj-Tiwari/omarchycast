@@ -398,6 +398,16 @@ Flickable {
       minimum: 1; maximum: 40
       onUpdated: pane.commit("providers", "notesLimit", value)
     }
+    Toggle {
+      label: "Plugins"; hint: "Commands from ~/.config/omarchycast/plugins"
+      checked: host.config.providers.plugins
+      onToggled: pane.commit("providers", "plugins", value)
+    }
+    Stepper {
+      label: "Plugin results"; value: host.config.providers.pluginsLimit
+      minimum: 1; maximum: 40
+      onUpdated: pane.commit("providers", "pluginsLimit", value)
+    }
     PathField {
       label: "Notes folder"
       placeholder: "~/Notes"

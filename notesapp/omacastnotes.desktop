@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Omacastnotes
+Comment=Floating markdown notes for the Omarchycast launcher
+Exec=omacastnotes
+Icon=accessories-text-editor
+Terminal=false
+Categories=Utility;TextEditor;
+StartupWMClass=omacastnotes
+StartupNotify=false

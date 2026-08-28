@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Notes</title>
+  <link rel="stylesheet" href="katex.min.css" />
+  <style>
+    :root {
+      --bg: #1a1b26;
+      --fg: #c0caf5;
+      --muted: #565f89;
+      --accent: #7aa2f7;
+      --font: "Adwaita Sans", "Inter", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+      --mono: "FiraCode Nerd Font", "Fira Code", ui-monospace, monospace;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font);
+      overflow: hidden;
+      cursor: default;
+    }
+    #frame, #card {
+      height: 100%;
+      background: var(--bg);
+    }
+    #card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #pulse {
+      position: absolute;
+      left: 0; right: 0; top: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      transform: translateX(-100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.busy #pulse {
+      opacity: 1;
+      animation: sweep 1.1s ease-in-out infinite;
+    }
+    @keyframes sweep {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    #copy, #mode {
+      position: absolute;
+      top: 10px;
+      z-index: 3;
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      opacity: 0;
+    }
+    #copy { right: 10px; }
+    #mode { right: 40px; }
+    #card:hover #copy, #card:hover #mode { opacity: 1; }
+    #copy:hover, #mode:hover { color: var(--fg); background: rgba(122, 162, 247, 0.12); }
+    #scroll {
+      flex: 1;
+      min-height: 0;
+      padding: 44px 20px 28px;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+    #src, #preview {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      box-sizing: border-box;
+      overflow: auto;
+    }
+    #src {
+      border: 0;
+      outline: none;
+      resize: none;
+      background: transparent;
+      color: var(--fg);
+      font: 14.5px/1.55 var(--font);
+      caret-color: var(--accent);
+      cursor: text;
+      padding: 0;
+      margin: 0;
+    }
+    #preview {
+      display: none;
+      font: 14.5px/1.6 var(--font);
+      cursor: text;
+      user-select: text;
+    }
+    body.preview #src { display: none; }
+    body.preview #preview { display: block; }
+    #preview > *:first-child { margin-top: 0; }
+    #preview p, #preview li { color: var(--fg); }
+    #preview h1, #preview h2, #preview h3, #preview h4 {
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      margin: 0.9em 0 0.4em;
+    }
+    #preview h1 { font-size: 1.15em; }
+    #preview h2 { font-size: 1.05em; }
+    #preview h3 { font-size: 1em; }
+    #preview p { margin: 0.55em 0; }
+    #preview ul, #preview ol { margin: 0.4em 0; padding-left: 1.2em; }
+    #preview blockquote {
+      margin: 0.6em 0;
+      padding-left: 0.8em;
+      border-left: 2px solid var(--accent);
+      color: var(--muted);
+    }
+    #preview code {
+      font-family: var(--mono);
+      font-size: 0.86em;
+      background: rgba(122, 162, 247, 0.1);
+      padding: 0.05em 0.35em;
+      border-radius: 4px;
+    }
+    #preview .katex { font-size: 1.08em; }
+    #preview .katex-display { margin: 0.85em 0; overflow-x: auto; overflow-y: hidden; }
+    #preview table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.8em 0;
+      font-size: 13px;
+    }
+    #preview th, #preview td {
+      border-bottom: 1px solid rgba(192, 202, 245, 0.14);
+      padding: 7px 10px 7px 0;
+      text-align: left;
+      vertical-align: top;
+    }
+    #preview thead th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11.5px;
+    }
+    #status {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 10px;
+      font-size: 11px;
+      color: var(--muted);
+      pointer-events: none;
+      opacity: 0;
+    }
+    body.busy #status, #status.show { opacity: 1; }
+    * { scrollbar-width: thin; scrollbar-color: rgba(86, 95, 137, 0.6) transparent; }
+  </style>
+</head>
+<body>
+  <div id="frame">
+    <div id="card">
+      <div id="pulse"></div>
+      <button id="mode" type="button" title="Toggle preview" aria-label="Toggle preview">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M4 6h16M4 12h10M4 18h16"/>
+        </svg>
+      </button>
+      <button id="copy" type="button" title="Copy all" aria-label="Copy all">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="8" y="8" width="12" height="12" rx="2"/>
+          <path d="M4 16V6a2 2 0 0 1 2-2h10"/>
+        </svg>
+      </button>
+      <div id="scroll">
+        <textarea id="src" spellcheck="false" autofocus></textarea>
+        <div id="preview"></div>
+      </div>
+      <div id="status"></div>
+    </div>
+  </div>
+  <script src="marked.min.js"></script>
+  <script src="katex.min.js"></script>
+  <script src="auto-render.min.js"></script>
+  <script>
+    const src = document.getElementById("src");
+    const preview = document.getElementById("preview");
+    const statusEl = document.getElementById("status");
+    const copyBtn = document.getElementById("copy");
+    const modeBtn = document.getElementById("mode");
+    let busy = false;
+    let busyTimer = null;
+    let saveTimer = null;
+    let statusTimer = null;
+
+    function post(payload) {
+      try {
+        window.webkit.messageHandlers.native.postMessage(JSON.stringify(payload));
+      } catch (err) {}
+    }
+
+    function setBusy(on, label) {
+      busy = on;
+      document.body.classList.toggle("busy", on);
+      clearTimeout(busyTimer);
+      if (on) {
+        statusEl.textContent = label || "reading maths…";
+        statusEl.classList.add("show");
+        busyTimer = setTimeout(() => {
+          setBusy(false);
+          flash("timed out");
+        }, 25000);
+      } else if (!statusEl.dataset.hold) {
+        statusEl.classList.remove("show");
+      }
+    }
+
+    function flash(msg) {
+      statusEl.dataset.hold = "1";
+      statusEl.textContent = msg;
+      statusEl.classList.add("show");
+      clearTimeout(statusTimer);
+      statusTimer = setTimeout(() => {
+        delete statusEl.dataset.hold;
+        if (!busy) statusEl.classList.remove("show");
+      }, 1400);
+    }
+
+    function protectMath(md) {
+      const slots = [];
+      const stash = (full) => {
+        const key = `%%MATH${slots.length}%%`;
+        slots.push(full);
+        return key;
+      };
+      md = md.replace(/\$\$[\s\S]+?\$\$/g, stash);
+      md = md.replace(/\\\[[\s\S]+?\\\]/g, stash);
+      md = md.replace(/\\\([\s\S]+?\\\)/g, stash);
+      md = md.replace(/\$[^$\n]+?\$/g, stash);
+      return { md, slots };
+    }
+
+    function restoreMath(html, slots) {
+      return html.replace(/%%MATH(\d+)%%/g, (_, i) => slots[Number(i)] || "");
+    }
+
+    const BASE_SYM = "([A-Za-z](?:_[A-Za-z0-9]+)?|\\\\[A-Za-z]+(?:\\{[^}]+\\})?)";
+
+    function braceComplements(s) {
+      s = s.replace(new RegExp(BASE_SYM + "\\^\\(([^)]+)\\)", "g"), "$1^{$2}");
+      s = s.replace(new RegExp(BASE_SYM + "\\^(c|C|circ|complement)\\b", "g"), "$1^{$2}");
+      return s;
+    }
+
+    function formatComplements(md) {
+      const { md: safe, slots } = protectMath(md || "");
+      const wrapped = slots.map((slot) => {
+        if (slot.startsWith("$$") || slot.startsWith("\\[") || slot.startsWith("\\(")) return slot;
+        const inner = slot.startsWith("$") && slot.endsWith("$") && slot.length >= 2
+          ? slot.slice(1, -1)
+          : slot;
+        return "$" + braceComplements(inner) + "$";
+      });
+      let s = braceComplements(safe);
+      s = s.replace(
+        new RegExp("(^|[^$\\\\])(" + BASE_SYM + "\\^\\{[^}]+\\})", "g"),
+        (m, pre, expr) => pre + "$" + expr + "$"
+      );
+      return restoreMath(s, wrapped);
+    }
+
+    function lineIsSep(t) {
+      return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(String(t).trim());
+    }
+
+    function lineLooksRow(t) {
+      t = String(t).trim();
+      return t.includes("|") && (t.startsWith("|") || (t.match(/\|/g) || []).length >= 2);
+    }
+
+    function tidyRow(line) {
+      let t = String(line).replace(/\s+/g, " ").trim();
+      if (!t.startsWith("|")) t = "| " + t;
+      if (!t.endsWith("|")) t = t + " |";
+      t = t.replace(/\s*\|\s*/g, " | ").replace(/^\s\|/, "|").replace(/\|\s$/, "|");
+      return t;
+    }
+
+    function normalizeMarkdownTables(md) {
+      const lines = (md || "").split("\n");
+      const out = [];
+      let i = 0;
+      while (i < lines.length) {
+        const next = i + 1 < lines.length ? lines[i + 1].trim() : "";
+        if (lineLooksRow(lines[i]) && lineIsSep(next)) {
+          if (out.length && out[out.length - 1].trim() !== "") out.push("");
+          const block = [lines[i].trim(), next];
+          i += 2;
+          let acc = "";
+          const flush = () => {
+            if (acc.trim()) {
+              block.push(acc);
+              acc = "";
+            }
+          };
+          while (i < lines.length) {
+            const t = lines[i].trim();
+            if (t === "") break;
+            if (/^#{1,6}\s/.test(t) || /^\s*([-*+]|\d+\.)\s/.test(t)) {
+              if (!lineLooksRow(t)) break;
+            }
+            if (!acc) acc = t;
+            else if (t === "|") acc = acc.replace(/\s*$/, "") + " |";
+            else if (t.startsWith("|") && (acc.endsWith("|") || lineIsSep(acc))) {
+              flush();
+              acc = t;
+            } else {
+              const extra = t.startsWith("|") ? t.slice(1).trim() : t;
+              acc = (acc.replace(/\s*\|\s*$/, "") + " " + extra).replace(/\s+/g, " ").trim();
+              if (t.endsWith("|") && !acc.endsWith("|")) acc += " |";
+            }
+            if (acc.endsWith("|") && i + 1 < lines.length) {
+              const peek = lines[i + 1].trim();
+              if (peek.startsWith("|") || peek === "" || lineIsSep(peek)) flush();
+            }
+            i++;
+          }
+          flush();
+          for (const row of block) out.push(tidyRow(row));
+          if (i < lines.length && lines[i].trim() !== "") out.push("");
+          continue;
+        }
+        out.push(lines[i]);
+        i++;
+      }
+      return out.join("\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+    }
+
+    function tidyMarkdown(md) {
+      return formatComplements(normalizeMarkdownTables(md || ""));
+    }
+
+    function looksBrokenMath(text) {
+      const nonempty = String(text || "").split(/\n/).map((l) => l.trim()).filter(Boolean);
+      if (nonempty.length < 4) return false;
+      const avg = nonempty.reduce((n, l) => n + l.length, 0) / nonempty.length;
+      const short = nonempty.filter((l) => l.length <= 2).length;
+      const glyphs = nonempty.filter((l) => /^[ΩωσΣ∅ø∪∩∈⊆{}′']$/.test(l)).length;
+      return (avg <= 10 && short / nonempty.length >= 0.3) || glyphs >= 3;
+    }
+
+    function collapseBrokenMath(text) {
+      if (!looksBrokenMath(text)) return text;
+      const lines = String(text).replace(/\r/g, "").split("\n");
+      const out = [];
+      let run = "";
+      const flush = () => {
+        if (run) {
+          out.push(run);
+          run = "";
+        }
+      };
+      for (const line of lines) {
+        const s = line.trim();
+        if (s === "") {
+          flush();
+          if (out.length && out[out.length - 1] !== "") out.push("");
+          continue;
+        }
+        const short = s.length <= 2 || (s.length <= 8 && /^[\[\]{}().,;:=∅øΩωσΣ∪∩∈⊆⊂′'a-zA-Z0-9\\_-]+$/.test(s) && !s.includes(" "));
+        if (short) {
+          run += s;
+          continue;
+        }
+        if (run) {
+          if ("={,;)]}".includes(s[0])) {
+            run += s;
+            flush();
+          } else if (run.endsWith("-")) {
+            run = run.slice(0, -1) + s;
+            flush();
+          } else {
+            flush();
+            out.push(s);
+          }
+        } else if (out.length && String(out[out.length - 1]).endsWith("-")) {
+          const prev = String(out[out.length - 1]);
+          const keep = prev.length >= 2 && prev.charCodeAt(prev.length - 2) > 127;
+          out[out.length - 1] = (keep ? prev : prev.slice(0, -1)) + s;
+        } else {
+          out.push(s);
+        }
+      }
+      flush();
+      let joined = out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+      joined = joined.replace(/(Ω_?[0-9]|[A-Za-z]_?[0-9])\s*\1/g, "$1");
+      return joined;
+    }
+
+    function repairIfBroken(text) {
+      const collapsed = collapseBrokenMath(text || "");
+      return tidyMarkdown(collapsed);
+    }
+
+    function markdown() {
+      return src.value;
+    }
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => post({ type: "save", markdown: src.value }), 280);
+    }
+
+    function renderPreview() {
+      const md = src.value;
+      const { md: safe, slots } = protectMath(tidyMarkdown(md));
+      let html = marked.parse(safe, { gfm: true, breaks: false });
+      html = restoreMath(html, slots);
+      preview.innerHTML = html;
+      if (md && window.renderMathInElement) {
+        renderMathInElement(preview, {
+          delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "\\[", right: "\\]", display: true },
+            { left: "$", right: "$", display: false },
+            { left: "\\(", right: "\\)", display: false }
+          ],
+          throwOnError: false
+        });
+      }
+    }
+
+    function showPreview(on) {
+      document.body.classList.toggle("preview", on);
+      if (on) {
+        renderPreview();
+      } else {
+        src.focus();
+      }
+    }
+
+    let pending = null;
+
+    function insertAtCaret(text) {
+      const chunk = text || "";
+      const start = src.selectionStart;
+      const end = src.selectionEnd;
+      src.value = src.value.slice(0, start) + chunk + src.value.slice(end);
+      src.selectionStart = src.selectionEnd = start + chunk.length;
+      scheduleSave();
+      src.focus();
+      return { start, end: start + chunk.length };
+    }
+
+    function replaceRange(start, end, text) {
+      const chunk = text || "";
+      src.value = src.value.slice(0, start) + chunk + src.value.slice(end);
+      src.selectionStart = src.selectionEnd = start + chunk.length;
+      scheduleSave();
+      src.focus();
+    }
+
+    function tidyLineBeforeCaret() {
+      const v = src.value;
+      const pos = src.selectionStart;
+      if (pos <= 0) return;
+      const prevEnd = v.lastIndexOf("\n", pos - 1);
+      if (prevEnd < 0) return;
+      const prevStart = v.lastIndexOf("\n", prevEnd - 1) + 1;
+      const line = v.slice(prevStart, prevEnd);
+      const tidied = formatComplements(line);
+      if (tidied === line) return;
+      src.value = v.slice(0, prevStart) + tidied + v.slice(prevEnd);
+      src.selectionStart = src.selectionEnd = pos + (tidied.length - line.length);
+      scheduleSave();
+    }
+
+    function clipboardImage(event) {
+      const items = event.clipboardData && event.clipboardData.items;
+      if (!items) return null;
+      for (const item of items) {
+        if (item.type && item.type.startsWith("image/")) return item;
+      }
+      return null;
+    }
+
+    function pasteImage(event) {
+      const image = clipboardImage(event);
+      if (!image) return false;
+      event.preventDefault();
+      const file = image.getAsFile();
+      if (!file) {
+        setBusy(true, "reading maths…");
+        post({ type: "format-clipboard-image" });
+        return true;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        setBusy(true, "reading maths…");
+        post({ type: "format-image", dataUrl: reader.result });
+      };
+      reader.onerror = () => setBusy(false);
+      reader.readAsDataURL(file);
+      return true;
+    }
+
+    const PAIRS = { "(": ")", "[": "]", "{": "}", "$": "$" };
+    const CLOSERS = new Set(Object.values(PAIRS));
+
+    function handleBrackets(event) {
+      if (event.ctrlKey || event.metaKey || event.altKey) return false;
+      const start = src.selectionStart;
+      const end = src.selectionEnd;
+      const value = src.value;
+      const selected = value.slice(start, end);
+
+      if (event.key === "Backspace" && start === end && start > 0) {
+        const open = value[start - 1];
+        const close = PAIRS[open];
+        if (close && value[start] === close) {
+          event.preventDefault();
+          src.value = value.slice(0, start - 1) + value.slice(start + 1);
+          src.selectionStart = src.selectionEnd = start - 1;
+          scheduleSave();
+          return true;
+        }
+        return false;
+      }
+
+      if (start === end && CLOSERS.has(event.key) && value[start] === event.key) {
+        event.preventDefault();
+        src.selectionStart = src.selectionEnd = start + 1;
+        return true;
+      }
+
+      const close = PAIRS[event.key];
+      if (!close) return false;
+      event.preventDefault();
+      src.value = value.slice(0, start) + event.key + selected + close + value.slice(end);
+      src.selectionStart = start + 1;
+      src.selectionEnd = start + 1 + selected.length;
+      scheduleSave();
+      return true;
+    }
+
+    function copyAll() {
+      const md = src.value;
+      try { navigator.clipboard.writeText(md); } catch (err) {}
+      post({ type: "copy", markdown: md });
+    }
+
+    src.addEventListener("input", () => scheduleSave());
+    src.addEventListener("paste", (event) => {
+      if (pasteImage(event)) return;
+      const text = event.clipboardData ? event.clipboardData.getData("text/plain") : "";
+      if (!text || !looksBrokenMath(text)) return;
+      event.preventDefault();
+      const cleaned = collapseBrokenMath(text);
+      pending = insertAtCaret(cleaned);
+      setBusy(true, "tidying maths…");
+      post({ type: "format-text", text: cleaned });
+    });
+    document.addEventListener("paste", (event) => {
+      if (event.target === src) return;
+      if (pasteImage(event)) return;
+      const text = event.clipboardData && event.clipboardData.getData("text/plain");
+      if (text) insertAtCaret(text);
+    });
+
+    src.addEventListener("keydown", (event) => {
+      if (handleBrackets(event)) return;
+      if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        requestAnimationFrame(tidyLineBeforeCaret);
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        post({ type: "hide" });
+        return;
+      }
+      if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        const on = !document.body.classList.contains("preview");
+        if (!on) src.value = repairIfBroken(src.value);
+        showPreview(on);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && event.shiftKey) {
+        event.preventDefault();
+        copyAll();
+      }
+    });
+
+    copyBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      copyAll();
+    });
+    modeBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      const on = !document.body.classList.contains("preview");
+      if (!on) src.value = repairIfBroken(src.value);
+      showPreview(on);
+    });
+    preview.addEventListener("click", () => showPreview(false));
+
+    window.ShadowNotes = {
+      boot(payload) {
+        if (payload.theme) {
+          const t = payload.theme;
+          const root = document.documentElement.style;
+          if (t.bg) root.setProperty("--bg", t.bg);
+          if (t.fg) root.setProperty("--fg", t.fg);
+          if (t.muted) root.setProperty("--muted", t.muted);
+          if (t.accent) root.setProperty("--accent", t.accent);
+        }
+        src.value = repairIfBroken(payload.markdown || "");
+        src.focus();
+      },
+      insert(md) {
+        setBusy(false);
+        const cleaned = repairIfBroken(md || "");
+        if (pending) {
+          replaceRange(pending.start, pending.end, cleaned);
+          pending = null;
+        } else {
+          insertAtCaret(cleaned);
+        }
+        flash("formatted");
+      },
+      replace(md) {
+        setBusy(false);
+        const cleaned = repairIfBroken(md || "");
+        if (pending) {
+          replaceRange(pending.start, pending.end, cleaned);
+          pending = null;
+        } else {
+          insertAtCaret(cleaned);
+        }
+        flash("formatted");
+      },
+      fail(message) {
+        setBusy(false);
+        pending = null;
+        flash(message || "couldn’t format");
+      },
+      copied() { flash("copied"); },
+      setBusy
+    };
+  </script>
+</body>
+</html>

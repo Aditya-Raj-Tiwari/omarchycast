@@ -98,7 +98,7 @@ The overlay also starts the daemon on demand if it isn't running.
 `~/.config/omarchycast/config.json` and applies immediately.
 
 - **Hotkey** — click the field, press a combination; it rewrites the Hyprland binding and reloads.
-- **Sources** — enable apps, calculator, dates and notes individually, cap how many rows each contributes, and set the notes folder.
+- **Sources** — enable apps, calculator, dates, notes and plugins individually, cap how many rows each contributes, and set the notes folder.
 - **Appearance** — width, visible rows, corner radius, and whether to follow the Omarchy theme.
 - **Behaviour** — dismiss on click-away, what Escape does, and whether an empty query lists frequent apps.
 
@@ -108,12 +108,12 @@ Notes are markdown files in `~/Notes` (configurable). Titles come from the first
 `# heading`, falling back to the filename. Typing `note <title>` creates one and
 opens it straight away, so capturing a thought is a single keystroke.
 
-Notes open in [shadow-notes](https://github.com/Aditya-Raj-Tiwari), the floating
-markdown scratchpad, which now takes a file path:
+Notes open in **Omacastnotes**, the floating markdown viewer bundled in
+`notesapp/` (formerly shadow-notes) and installed by `make install`:
 
 ```bash
-shadow-notes                 # the scratchpad, as before
-shadow-notes ~/Notes/foo.md  # a specific note
+omacastnotes                 # the scratchpad
+omacastnotes ~/Notes/foo.md  # a specific note
 ```
 
 Each note gets its own instance id, so opening a second note gives it a new
@@ -121,6 +121,33 @@ window while re-opening the same note focuses the one already on screen.
 
 Titles are matched fuzzily and body text literally — a fuzzy match against a
 whole document scores almost anything and buries the note you meant.
+
+## Plugins
+
+Drop a JSON manifest into `~/.config/omarchycast/plugins/` and its commands
+join the results — no recompiling. A manifest can contribute **static
+commands**, fuzzy-matched like applications:
+
+```json
+{
+  "name": "System",
+  "commands": [
+    { "title": "Lock screen", "glyph": "🔒", "exec": ["omarchy-lock-screen"] },
+    { "title": "Copy hostname", "copy": "my-host" }
+  ]
+}
+```
+
+and an optional **dynamic source**: a `keyword` plus a `query` argv, run only
+when the query starts with that keyword. The script receives the rest of the
+query as its final argument and prints one JSON object per line —
+`{"title": "…", "copy": "…"}` or `{"title": "…", "exec": ["cmd", "arg"]}`.
+
+Commands are argv arrays, never shell strings. Dynamic scripts run only when
+their keyword is typed, under a 700 ms budget and a 64 KB output cap, and are
+killed on overrun. Manifests are hot-reloaded when the directory changes. What
+an installed plugin's own programs do is the user's business — the daemon
+bounds what it reads from them, not what they are.
 
 ## Clipboard
 

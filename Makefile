@@ -23,9 +23,16 @@ check:
 	# journal, while silently continuing to serve the previously compiled copy.
 	$(QMLLINT) -I $(OMARCHY_PATH)/shell Omarchycast.qml SettingsPane.qml
 
-# Installs the daemon and registers the overlay with the shell.
+NOTESDIR ?= $(HOME)/.local/share/omacastnotes
+
+# Installs the daemon, the notes viewer, and registers the overlay.
 install: build
 	install -Dm755 daemon/target/release/omarchycastd $(BINDIR)/omarchycastd
+	install -Dm755 notesapp/omacastnotes $(BINDIR)/omacastnotes
+	mkdir -p $(NOTESDIR)
+	cp -f notesapp/omacastnotes.py $(NOTESDIR)/
+	cp -rf notesapp/ui $(NOTESDIR)/
+	install -Dm644 notesapp/omacastnotes.desktop $(HOME)/.local/share/applications/omacastnotes.desktop
 	mkdir -p $(PLUGINDIR)
 	cp -f manifest.json Omarchycast.qml SettingsPane.qml $(PLUGINDIR)/
 	omarchy-shell shell rescanPlugins || true
@@ -48,7 +55,9 @@ dev:
 	omarchy-restart-shell
 
 uninstall:
-	rm -f $(BINDIR)/omarchycastd
+	rm -f $(BINDIR)/omarchycastd $(BINDIR)/omacastnotes
+	rm -rf $(NOTESDIR)
+	rm -f $(HOME)/.local/share/applications/omacastnotes.desktop
 	rm -rf $(PLUGINDIR)
 	rm -f $(HOME)/.config/hypr/omarchycast.lua
 	@echo "Remove the two 'Added by omarchycast' lines from ~/.config/hypr/hyprland.lua to finish."

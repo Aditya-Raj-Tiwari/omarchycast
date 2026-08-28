@@ -39,8 +39,8 @@ Item {
   property var config: ({
     hotkey: "CTRL + SPACE",
     providers: {
-      apps: true, calculator: true, dates: true, notes: true,
-      appsLimit: 20, notesLimit: 8, notesDirectory: ""
+      apps: true, calculator: true, dates: true, notes: true, plugins: true,
+      appsLimit: 20, notesLimit: 8, pluginsLimit: 10, notesDirectory: ""
     },
     appearance: { width: 720, rowsVisible: 8, cornerRadius: 16, followTheme: true },
     behaviour: { hideOnBlur: true, escClearsFirst: true, showRecentWhenEmpty: true, tourSeen: true }
