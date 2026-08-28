@@ -1,0 +1,672 @@
+import Quickshell
+import Quickshell.Io
+import Quickshell.Wayland
+import Quickshell.Hyprland
+import QtQuick
+import qs.Commons
+import qs.Ui
+
+// Overlay entry point. Omarchy summons this with `omarchy-shell toggle
+// adityarajtiwari.omacast`; the contract is the open/close/toggle trio below.
+Item {
+  id: root
+
+  property bool opened: false
+  property bool settingsOpen: false
+  property string queryText: ""
+  property int selectedIndex: 0
+  property var results: []
+  property string statusMessage: ""
+  // Hover must not steal the selection from the keyboard just because the
+  // pointer happens to rest over a row. It only takes over once it actually moves.
+  property bool pointerArmed: false
+  // Set while a "Copied" confirmation is on screen, so the launcher stays up
+  // just long enough for the user to see that something happened.
+  property bool confirming: false
+  // Resolved once per summon rather than bound live, so the launcher stays put
+  // if focus moves while it is open.
+  property var targetScreen: null
+
+  // Mirrors the daemon's config.json. Populated on connect; the settings pane
+  // edits this copy and sends the whole object back.
+  property var config: ({
+    hotkey: "CTRL + SPACE",
+    providers: {
+      apps: true, calculator: true, dates: true, notes: true,
+      appsLimit: 20, notesLimit: 8, notesDirectory: ""
+    },
+    appearance: { width: 720, rowsVisible: 8, cornerRadius: 16, followTheme: true },
+    behaviour: { hideOnBlur: true, escClearsFirst: true, showRecentWhenEmpty: true }
+  })
+
+  // Shares the [menu] surface tokens, so any theme that styles the Omarchy menu
+  // styles the launcher too.
+  readonly property bool themed: config.appearance.followTheme
+  readonly property color background: themed ? Color.menu.background : "#16161d"
+  readonly property color foreground: themed ? Color.menu.text : "#dcd7ba"
+  readonly property color borderColor: themed ? Color.menu.border : "#2a2a35"
+  readonly property color scrim: themed ? Color.menu.scrim : "#99000000"
+  readonly property color selectedBackground: themed ? Color.menu.selectedBackground : "#2d4f67"
+  readonly property color selectedText: themed ? Color.menu.selectedText : "#ffffff"
+  readonly property string fontFamily: Style.font.menuFamily
+
+  readonly property int cardWidth: Math.max(Style.space(420), Math.min(config.appearance.width, panel.width - Style.gapsOut * 2))
+  readonly property int rowHeight: Math.max(Style.space(46), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
+  readonly property int headerHeight: Math.max(Style.space(56), Style.font.title + Style.spacing.controlPaddingY * 2)
+  readonly property int footerHeight: Style.space(38)
+
+  // ---------------------------------------------------------------- lifecycle
+
+  // A keyboard-summoned launcher belongs on the output the user is looking at,
+  // which on a multi-monitor setup is rarely the one Quickshell would pick.
+  function resolveFocusedScreen() {
+    var monitor = Hyprland.focusedMonitor
+    var name = monitor ? String(monitor.name || "") : ""
+    if (name === "") return null
+    var screens = Quickshell.screens
+    for (var i = 0; i < screens.length; i++) {
+      if (String(screens[i].name) === name) return screens[i]
+    }
+    return null
+  }
+
+  function open(payloadJson) {
+    root.targetScreen = root.resolveFocusedScreen()
+    root.opened = true
+    root.settingsOpen = false
+    root.queryText = ""
+    // The TextInput keeps its own text; clearing only the mirror leaves the
+    // previous session's query on screen.
+    input.text = ""
+    root.selectedIndex = 0
+    root.statusMessage = ""
+    root.disarmPointer()
+    daemon.ensureConnected()
+    daemon.requestConfig()
+    root.runQuery("")
+    Qt.callLater(function () { input.forceActiveFocus() })
+  }
+
+  function close() {
+    closeAfterConfirm.stop()
+    clearConfirm.stop()
+    root.confirming = false
+    root.statusMessage = ""
+    root.opened = false
+    root.settingsOpen = false
+    root.results = []
+  }
+
+  function toggle() {
+    if (root.opened) root.close()
+    else root.open("{}")
+  }
+
+  // The search field is hidden while settings are open, which would otherwise
+  // leave nothing focused and no key handler to receive Escape.
+  onSettingsOpenChanged: Qt.callLater(function () {
+    if (root.settingsOpen) settingsPane.forceActiveFocus()
+    else if (root.opened) input.forceActiveFocus()
+  })
+
+  // ------------------------------------------------------------------- search
+
+  function runQuery(text) {
+    if (text.length === 0 && !config.behaviour.showRecentWhenEmpty) {
+      root.results = root.syntheticFor("")
+      root.selectedIndex = 0
+      return
+    }
+    daemon.send({ op: "query", text: text })
+  }
+
+  // Built-in commands, matched in the overlay rather than the daemon because
+  // they act on the shell rather than on anything the daemon indexes.
+  readonly property var commands: [
+    {
+      id: "ui:settings", provider: "ui", kind: "Omacast",
+      title: "Omacast Settings", subtitle: "Hotkey, sources, appearance, behaviour",
+      icon: null, glyph: "⚙", accessory: null,
+      keywords: ["settings", "preferences", "omacast", "config", "hotkey"]
+    },
+    {
+      id: "ui:clipboard", provider: "ui", kind: "Omarchy",
+      title: "Clipboard History", subtitle: "Open Omarchy's clipboard manager",
+      icon: null, glyph: "⎘", accessory: null,
+      keywords: ["clipboard", "clip", "history", "paste"]
+    }
+  ]
+
+  function syntheticFor(text) {
+    var needle = text.trim().toLowerCase()
+    if (needle.length < 2) return []
+    var matches = []
+    for (var i = 0; i < root.commands.length; i++) {
+      var command = root.commands[i]
+      for (var k = 0; k < command.keywords.length; k++) {
+        if (command.keywords[k].indexOf(needle) === 0) { matches.push(command); break }
+      }
+    }
+    return matches
+  }
+
+  function applyResults(items) {
+    root.results = root.syntheticFor(root.queryText).concat(items || [])
+    root.selectedIndex = 0
+    root.disarmPointer()
+    resultList.positionViewAtBeginning()
+  }
+
+  // One definition of "back", used by every Escape handler: leave settings,
+  // then clear the query, then dismiss.
+  function escape() {
+    if (root.settingsOpen) {
+      root.settingsOpen = false
+      return
+    }
+    if (root.config.behaviour.escClearsFirst && input.text.length > 0) {
+      input.text = ""
+      return
+    }
+    root.close()
+  }
+
+  function disarmPointer() {
+    root.pointerArmed = false
+  }
+
+  function move(delta) {
+    if (root.results.length === 0) return
+    root.disarmPointer()
+    // Wrapping means holding Up from the top lands on the last result.
+    root.selectedIndex = (root.selectedIndex + delta + root.results.length) % root.results.length
+    resultList.positionViewAtIndex(root.selectedIndex, ListView.Contain)
+  }
+
+  // Calculator, date and clipboard rows copy rather than launch, so the only
+  // evidence anything happened is the confirmation we show here.
+  function copiesToClipboard(item) {
+    return item && (item.provider === "calc" || item.provider === "date")
+  }
+
+  function activate(action) {
+    var item = root.results[root.selectedIndex]
+    if (!item) return
+    if (item.id === "ui:settings") {
+      root.settingsOpen = true
+      return
+    }
+    if (item.id === "ui:clipboard") {
+      // Omarchy already ships a clipboard manager; opening it beats keeping a
+      // second history of our own.
+      root.close()
+      openClipboard.running = true
+      return
+    }
+    root.lastActionCopied = root.copiesToClipboard(item)
+    daemon.send({ op: "activate", id: item.id, action: action })
+  }
+
+  property bool lastActionCopied: false
+
+  function confirmCopy(thenClose) {
+    root.confirming = true
+    root.statusMessage = "Copied to clipboard"
+    if (thenClose) closeAfterConfirm.restart()
+    else clearConfirm.restart()
+  }
+
+  // -------------------------------------------------------------------- daemon
+
+  function applyConfig(next) {
+    if (next) root.config = next
+  }
+
+  function saveConfig() {
+    daemon.send({ op: "setConfig", config: root.config })
+    root.statusMessage = "Saved"
+  }
+
+  Socket {
+    id: daemon
+
+    property int nextId: 1
+    property var pending: ({})
+    property int latestQueryId: 0
+
+    path: Quickshell.env("XDG_RUNTIME_DIR") + "/omacast.sock"
+    connected: true
+
+    function ensureConnected() {
+      if (!connected) {
+        // The daemon may not be up yet on a fresh login; start it and retry.
+        starter.running = true
+        reconnect.restart()
+      }
+    }
+
+    function send(request) {
+      if (!connected) {
+        ensureConnected()
+        return 0
+      }
+      var id = nextId++
+      request.rid = id
+      pending[id] = request.op
+      if (request.op === "query") latestQueryId = id
+      write(JSON.stringify(request) + "\n")
+      flush()
+      return id
+    }
+
+    function requestConfig() {
+      send({ op: "config" })
+    }
+
+    onConnectedChanged: {
+      if (connected) {
+        root.statusMessage = ""
+        requestConfig()
+        if (root.opened) root.runQuery(root.queryText)
+      }
+    }
+
+    parser: SplitParser {
+      splitMarker: "\n"
+      onRead: function (line) {
+        var reply
+        try {
+          reply = JSON.parse(line)
+        } catch (e) {
+          return
+        }
+
+        var op = daemon.pending[reply.rid]
+        delete daemon.pending[reply.rid]
+
+        if (!reply.ok) {
+          root.statusMessage = reply.error || "Something went wrong"
+          return
+        }
+
+        if (op === "query") {
+          // Drop responses to queries the user has already typed past.
+          if (reply.rid !== daemon.latestQueryId) return
+          root.applyResults(reply.items)
+        } else if (op === "config") {
+          root.applyConfig(reply.config)
+        } else if (op === "activate") {
+          var stay = reply.outcome === "stay"
+          if (root.lastActionCopied) root.confirmCopy(!stay)
+          else if (!stay) root.close()
+        }
+      }
+    }
+  }
+
+  Timer {
+    id: closeAfterConfirm
+    interval: 550
+    onTriggered: root.close()
+  }
+
+  Timer {
+    id: clearConfirm
+    interval: 1400
+    onTriggered: {
+      root.confirming = false
+      root.statusMessage = ""
+      if (root.opened && !root.settingsOpen) input.forceActiveFocus()
+    }
+  }
+
+  Process {
+    id: openClipboard
+    command: ["omarchy-shell", "shell", "toggle", "omarchy.clipboard", "{}"]
+    running: false
+  }
+
+  Process {
+    id: starter
+    command: ["omacastd"]
+    running: false
+  }
+
+  Timer {
+    id: reconnect
+    interval: 400
+    repeat: true
+    running: false
+    property int attempts: 0
+    onTriggered: {
+      if (daemon.connected) { stop(); attempts = 0; return }
+      daemon.connected = true
+      attempts += 1
+      if (attempts > 10) {
+        stop()
+        attempts = 0
+        root.statusMessage = "Could not reach the omacast daemon"
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------- view
+
+  PanelWindow {
+    id: panel
+    screen: root.targetScreen
+    visible: root.opened
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+    WlrLayershell.namespace: "omacast"
+    WlrLayershell.layer: WlrLayer.Overlay
+    // Exclusive keyboard focus is what makes this feel like a real launcher:
+    // no focus race, and no need to fight the compositor to keep the window up.
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    exclusionMode: ExclusionMode.Ignore
+
+    Rectangle {
+      anchors.fill: parent
+      color: root.scrim
+      MouseArea {
+        anchors.fill: parent
+        onClicked: if (root.config.behaviour.hideOnBlur) root.close()
+      }
+    }
+
+    Rectangle {
+      id: card
+      anchors.centerIn: parent
+      width: root.cardWidth
+      height: Math.min(parent.height - Style.gapsOut * 2, root.headerHeight + contentHeight + root.footerHeight)
+      radius: root.config.appearance.cornerRadius
+      color: root.background
+      border.color: root.borderColor
+      border.width: 1
+      clip: true
+
+      readonly property int contentHeight: root.settingsOpen
+        ? Math.min(Style.space(430), settingsPane.contentHeight)
+        : Math.max(root.rowHeight, Math.min(root.results.length, root.config.appearance.rowsVisible) * root.rowHeight + Style.space(12))
+
+      // Swallow clicks so they don't fall through to the dismissing scrim.
+      MouseArea { anchors.fill: parent; onClicked: {} }
+
+      // Safety net: whatever has focus, Escape always steps back one level.
+      Keys.onPressed: function (event) {
+        if (event.key !== Qt.Key_Escape) return
+        root.escape()
+        event.accepted = true
+      }
+
+      Column {
+        anchors.fill: parent
+
+        // ------------------------------------------------------------- header
+        Item {
+          width: parent.width
+          height: root.headerHeight
+
+          Text {
+            id: searchGlyph
+            anchors.left: parent.left
+            anchors.leftMargin: Style.space(20)
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.settingsOpen ? "⚙" : "⌕"
+            color: root.foreground
+            opacity: 0.55
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.title
+          }
+
+          TextInput {
+            id: input
+            anchors.left: searchGlyph.right
+            anchors.leftMargin: Style.space(12)
+            anchors.right: parent.right
+            anchors.rightMargin: Style.space(20)
+            anchors.verticalCenter: parent.verticalCenter
+            visible: !root.settingsOpen
+            focus: root.opened && !root.settingsOpen
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.title
+            selectByMouse: true
+            clip: true
+
+            onTextChanged: {
+              root.queryText = text
+              root.runQuery(text)
+            }
+
+            Text {
+              anchors.fill: parent
+              visible: input.text.length === 0
+              text: "Search apps, calculate, or ask a date"
+              color: root.foreground
+              opacity: 0.45
+              font: input.font
+              verticalAlignment: Text.AlignVCenter
+            }
+
+            Keys.onPressed: function (event) {
+              if (event.key === Qt.Key_Down || (event.key === Qt.Key_N && (event.modifiers & Qt.ControlModifier))) {
+                root.move(1); event.accepted = true
+              } else if (event.key === Qt.Key_Up || (event.key === Qt.Key_P && (event.modifiers & Qt.ControlModifier))) {
+                root.move(-1); event.accepted = true
+              } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                root.activate((event.modifiers & Qt.ShiftModifier) ? "secondary" : "primary")
+                event.accepted = true
+              } else if (event.key === Qt.Key_Comma && (event.modifiers & Qt.ControlModifier)) {
+                root.settingsOpen = true; event.accepted = true
+              } else if (event.key === Qt.Key_Escape) {
+                root.escape()
+                event.accepted = true
+              }
+            }
+          }
+
+          Text {
+            anchors.left: searchGlyph.right
+            anchors.leftMargin: Style.space(12)
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.settingsOpen
+            text: "Omacast Settings"
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.title
+          }
+        }
+
+        Rectangle {
+          width: parent.width
+          height: 1
+          color: root.borderColor
+          opacity: 0.6
+        }
+
+        // ------------------------------------------------------------ content
+        Item {
+          width: parent.width
+          height: card.contentHeight
+
+          ListView {
+            id: resultList
+            anchors.fill: parent
+            anchors.topMargin: Style.space(6)
+            anchors.bottomMargin: Style.space(6)
+            visible: !root.settingsOpen
+            model: root.results
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            currentIndex: root.selectedIndex
+
+            delegate: Item {
+              id: row
+              width: ListView.view.width
+              height: root.rowHeight
+
+              readonly property bool isSelected: index === root.selectedIndex
+              readonly property bool isCalc: modelData.provider === "calc" || modelData.provider === "date"
+
+              Rectangle {
+                anchors.fill: parent
+                anchors.leftMargin: Style.space(8)
+                anchors.rightMargin: Style.space(8)
+                radius: Style.space(10)
+                color: row.isSelected ? root.selectedBackground : "transparent"
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                // Only a real movement arms the pointer; entering a row because
+                // the list scrolled underneath a stationary cursor does not.
+                onPositionChanged: {
+                  root.pointerArmed = true
+                  root.selectedIndex = index
+                }
+                onEntered: if (root.pointerArmed) root.selectedIndex = index
+                onClicked: { root.selectedIndex = index; root.activate("primary") }
+              }
+
+              Row {
+                anchors.fill: parent
+                anchors.leftMargin: Style.space(20)
+                anchors.rightMargin: Style.space(20)
+                spacing: Style.space(12)
+
+                Item {
+                  width: Style.space(26)
+                  height: parent.height
+
+                  Image {
+                    anchors.centerIn: parent
+                    width: Style.space(26)
+                    height: Style.space(26)
+                    visible: status === Image.Ready
+                    source: modelData.icon ? "file://" + modelData.icon : ""
+                    fillMode: Image.PreserveAspectFit
+                    sourceSize.width: Style.space(52)
+                    sourceSize.height: Style.space(52)
+                    asynchronous: true
+                    cache: true
+                  }
+
+                  // Icon themes routinely lie about what they contain, so every
+                  // row keeps a glyph to fall back to.
+                  Text {
+                    anchors.centerIn: parent
+                    visible: !modelData.icon
+                    text: modelData.glyph || ""
+                    color: row.isSelected ? root.selectedText : root.foreground
+                    opacity: 0.6
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
+                  }
+                }
+
+                Column {
+                  width: parent.width - Style.space(26) - meta.width - Style.space(24)
+                  anchors.verticalCenter: parent.verticalCenter
+                  spacing: Style.space(1)
+
+                  Text {
+                    width: parent.width
+                    text: modelData.title || ""
+                    color: row.isSelected ? root.selectedText : root.foreground
+                    elide: Text.ElideRight
+                    font.family: root.fontFamily
+                    // The answer is the point of a calculator row, so it gets weight.
+                    font.pixelSize: row.isCalc ? Style.font.title : Style.font.body
+                  }
+
+                  Text {
+                    width: parent.width
+                    visible: !!modelData.subtitle
+                    text: modelData.subtitle || ""
+                    color: row.isSelected ? root.selectedText : root.foreground
+                    opacity: 0.6
+                    elide: Text.ElideRight
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                  }
+                }
+
+                Text {
+                  id: meta
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: modelData.accessory || modelData.kind || ""
+                  color: row.isSelected ? root.selectedText : root.foreground
+                  opacity: 0.55
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+            }
+          }
+
+          Text {
+            anchors.centerIn: parent
+            visible: !root.settingsOpen && root.results.length === 0
+            text: root.statusMessage.length > 0 ? root.statusMessage : "No results"
+            color: root.foreground
+            opacity: 0.5
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+          }
+
+          SettingsPane {
+            id: settingsPane
+            anchors.fill: parent
+            visible: root.settingsOpen
+            host: root
+          }
+        }
+
+        Rectangle {
+          width: parent.width
+          height: 1
+          color: root.borderColor
+          opacity: 0.6
+        }
+
+        // ------------------------------------------------------------- footer
+        Item {
+          width: parent.width
+          height: root.footerHeight
+
+          Text {
+            anchors.left: parent.left
+            anchors.leftMargin: Style.space(16)
+            anchors.verticalCenter: parent.verticalCenter
+            text: "OMACAST"
+            color: root.foreground
+            opacity: 0.45
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            font.letterSpacing: 1
+          }
+
+          Text {
+            anchors.right: parent.right
+            anchors.rightMargin: Style.space(16)
+            anchors.verticalCenter: parent.verticalCenter
+            color: root.foreground
+            opacity: 0.55
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            text: {
+              if (root.confirming) return root.statusMessage
+              if (root.settingsOpen) return "esc  Back"
+              var item = root.results[root.selectedIndex]
+              if (!item) return "ctrl+,  Settings      esc  Dismiss"
+              var verb = root.copiesToClipboard(item) ? "Copy" : "Open"
+              return "↵  " + verb + "      ctrl+,  Settings      esc  Dismiss"
+            }
+          }
+        }
+      }
+    }
+  }
+}

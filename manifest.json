@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "adityarajtiwari.omacast",
+  "name": "Omacast",
+  "version": "0.1.0",
+  "author": "Aditya Raj Tiwari",
+  "license": "MIT",
+  "description": "Keyboard launcher for Omarchy: fuzzy app search with frecency ranking, a calculator with unit conversion, date arithmetic, and clipboard history — in one overlay.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Omacast.qml"
+  }
+}
