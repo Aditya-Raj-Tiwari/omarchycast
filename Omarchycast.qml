@@ -370,20 +370,27 @@ Item {
     root.statusMessage = "Saved"
   }
 
-  Socket {
+  // The socket lives behind a Loader because of how Quickshell's Socket fails:
+  // it attempts to connect exactly once, when `connected: true` is first
+  // applied, and after that attempt fails it ignores writes to `connected`
+  // entirely — toggling the property retries nothing. The only way to try
+  // again is a fresh Socket, so retrying means recreating the object. Without
+  // this, a shell that loads the plugin before the daemon is listening (a
+  // fresh install, most visibly) can never connect until the whole shell
+  // restarts.
+  QtObject {
     id: daemon
 
-    property int nextId: 1
-    property var pending: ({})
-    property int latestQueryId: 0
-
-    path: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchycast.sock"
-    connected: true
+    readonly property bool connected: link.item ? link.item.connected : false
 
     function ensureConnected() {
       if (connected) return
-      // The daemon may not be up yet on a fresh login; start it and retry.
-      starter.running = true
+      // Detached rather than a child Process: a daemon owned by the shell dies
+      // with it on every shell restart, and the next shell then wakes up in
+      // exactly the unconnected state this file exists to avoid. The daemon
+      // refuses to bind a socket a live instance already owns, so a spare
+      // start costs nothing.
+      Quickshell.execDetached(["omarchycastd"])
       reconnect.restart()
     }
 
@@ -394,55 +401,80 @@ Item {
         ensureConnected()
         return 0
       }
-      var id = nextId++
-      request.rid = id
-      pending[id] = request.op
-      if (request.op === "query") latestQueryId = id
-      write(JSON.stringify(request) + "\n")
-      flush()
-      return id
+      return link.item.submit(request)
     }
 
     function requestConfig() {
       send({ op: "config" })
     }
+  }
 
-    onConnectedChanged: {
-      if (connected) {
-        root.statusMessage = ""
-        requestConfig()
-        if (root.opened) root.runQuery(root.queryText)
+  Loader {
+    id: link
+    active: true
+
+    sourceComponent: Socket {
+      id: sock
+
+      property int nextId: 1
+      property var pending: ({})
+      property int latestQueryId: 0
+
+      path: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchycast.sock"
+      connected: true
+
+      function submit(request) {
+        var id = nextId++
+        request.rid = id
+        pending[id] = request.op
+        if (request.op === "query") latestQueryId = id
+        write(JSON.stringify(request) + "\n")
+        flush()
+        return id
       }
-    }
 
-    parser: SplitParser {
-      splitMarker: "\n"
-      onRead: function (line) {
-        var reply
-        try {
-          reply = JSON.parse(line)
-        } catch (e) {
-          return
-        }
+      onConnectedChanged: {
+        if (!connected) return
+        root.statusMessage = ""
+        // Straight to submit, not through the facade: a unix-socket connect
+        // can complete synchronously during instantiation, before the Loader
+        // has assigned `item`, and the facade would misread that as "not
+        // connected". The deferred query re-run runs after assignment.
+        submit({ op: "config" })
+        if (root.opened) Qt.callLater(function () {
+          if (sock.connected) root.runQuery(root.queryText)
+        })
+      }
 
-        var op = daemon.pending[reply.rid]
-        delete daemon.pending[reply.rid]
+      parser: SplitParser {
+        splitMarker: "\n"
+        onRead: function (line) {
+          var reply
+          try {
+            reply = JSON.parse(line)
+          } catch (e) {
+            return
+          }
 
-        if (!reply.ok) {
-          root.statusMessage = String(reply.error || "Something went wrong").slice(0, 300)
-          return
-        }
+          var op = sock.pending[reply.rid]
+          delete sock.pending[reply.rid]
 
-        if (op === "query") {
-          // Drop responses to queries the user has already typed past.
-          if (reply.rid !== daemon.latestQueryId) return
-          root.applyResults(reply.items)
-        } else if (op === "config") {
-          root.applyConfig(reply.config)
-        } else if (op === "activate") {
-          var stay = reply.outcome === "stay"
-          if (root.lastActionCopied) root.confirmCopy(!stay)
-          else if (!stay) root.close()
+          if (!reply.ok) {
+            root.statusMessage = String(reply.error || "Something went wrong").slice(0, 300)
+            return
+          }
+
+          if (op === "query") {
+            // Drop responses to queries the user has already typed past.
+            if (reply.rid !== sock.latestQueryId) return
+            root.applyResults(reply.items)
+          } else if (op === "config") {
+            root.applyConfig(reply.config)
+          } else if (op === "activate") {
+            var stay = reply.outcome === "stay"
+            if (root.lastActionCopied) root.confirmCopy(!stay)
+            else if (!stay) root.close()
+          }
         }
       }
     }
@@ -470,12 +502,6 @@ Item {
     running: false
   }
 
-  Process {
-    id: starter
-    command: ["omarchycastd"]
-    running: false
-  }
-
   Timer {
     id: reconnect
     interval: 400
@@ -488,10 +514,10 @@ Item {
         attempts = 0
         return
       }
-      // Toggle rather than assign: setting `connected` to the value it already
-      // holds is not a change, so it would never retry the connection.
-      daemon.connected = false
-      daemon.connected = true
+      // Recreate rather than toggle: a Socket that has failed once ignores
+      // writes to `connected`, so a fresh object is the only real retry.
+      link.active = false
+      link.active = true
       attempts += 1
       if (attempts > 12) {
         stop()
