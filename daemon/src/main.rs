@@ -221,7 +221,7 @@ fn watch_desktop_files(apps: Arc<AppsProvider>) {
         }
 
         for result in rx {
-            if result.is_ok() {
+            if changed(&result) {
                 apps.reindex();
             }
         }
@@ -251,7 +251,7 @@ fn watch_notes(notes: Arc<NotesProvider>) {
             return;
         }
         for result in rx {
-            if result.is_ok() {
+            if changed(&result) {
                 notes.reindex();
             }
         }
@@ -275,11 +275,17 @@ fn watch_plugins(plugins: Arc<PluginsProvider>) {
             return;
         }
         for result in rx {
-            if result.is_ok() {
+            if changed(&result) {
                 plugins.reindex();
             }
         }
     });
+}
+
+/// notify watches opens and reads too, so a reindex that opens the watched
+/// files would otherwise trigger the next reindex, forever.
+fn changed(result: &notify_debouncer_full::DebounceEventResult) -> bool {
+    result.as_ref().is_ok_and(|events| events.iter().any(|e| !e.kind.is_access()))
 }
 
 fn install_signal_handler() {
